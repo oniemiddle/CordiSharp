@@ -54,7 +54,7 @@ public sealed class Logger
 
 /// <summary>The logger service: exporters + buffer + named loggers.
 /// Ports cordis <c>LoggerService</c>.</summary>
-public sealed class LoggerService
+public sealed partial class LoggerService
 {
     private readonly Context _ctx;
     private readonly Dictionary<int, ILogExporter> _exporters = new();
@@ -118,12 +118,21 @@ public sealed class LoggerService
 
     private static object?[] PrependFormat(object? format, object?[] args)
     {
-        if (format is Exception error)
+        while (true)
         {
-            if (error.InnerException is not null) return PrependFormat(error.InnerException, args);
-            return new object?[] { "%s", error.StackTrace ?? error.Message }.Concat(args).ToArray();
+            if (format is Exception error)
+            {
+                if (error.InnerException is not null)
+                {
+                    format = error.InnerException;
+                    continue;
+                }
+
+                return new object?[] { "%s", error.StackTrace ?? error.Message }.Concat(args).ToArray();
+            }
+
+            return new[] { format }.Concat(args).ToArray();
         }
-        return new[] { format }.Concat(args).ToArray();
     }
 
     /// <summary>Gets a named logger (mirrors the callable cordis logger service).</summary>
@@ -144,7 +153,7 @@ public sealed class LoggerService
         var args = message.Args.ToList();
         var format = args.Count > 0 ? Convert.ToString(args[0]) ?? "" : "";
         if (args.Count > 0) args.RemoveAt(0);
-        var result = Regex.Replace(format, "%([a-zA-Z%])", match =>
+        var result = ArgumentRegex().Replace(format, match =>
         {
             if (match.Value == "%%") return "%";
             var spec = match.Groups[1].Value;
@@ -163,8 +172,16 @@ public sealed class LoggerService
         });
         foreach (var arg in args)
         {
-            result += " " + (arg is null ? "null" : arg is string s ? s : JsonSerializer.Serialize(arg));
+            result += " " + arg switch
+            {
+                null => "null",
+                string s => s,
+                _ => JsonSerializer.Serialize(arg)
+            };
         }
         return result;
     }
+
+    [GeneratedRegex("%([a-zA-Z%])")]
+    private static partial Regex ArgumentRegex();
 }

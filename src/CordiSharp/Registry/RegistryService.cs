@@ -20,7 +20,7 @@ public sealed class RegistryService
     /// <summary>Resolves a plugin object into a runtime (registering it on first use).</summary>
     public PluginHandle Plugin(Context ctx, object plugin, object? config = null)
     {
-        if (plugin is null || !TryResolve(plugin, out var key, out var built))
+        if (!TryResolve(plugin, out var key, out var built))
         {
             throw new InvalidPluginException("invalid plugin, expect function or object with an 'apply' method, received " + (plugin?.GetType().Name ?? "null"));
         }
@@ -49,13 +49,12 @@ public sealed class RegistryService
 
     internal PluginRuntime? GetRuntime(object plugin)
     {
-        if (TryResolve(plugin, out var key, out _)) return _internal.TryGetValue(key, out var runtime) ? runtime : null;
-        return null;
+        return TryResolve(plugin, out var key, out _) ? _internal.GetValueOrDefault(key) : null;
     }
 
     internal bool HasRuntime(PluginRuntime? runtime)
     {
-        return runtime is not null && _internal.Values.Contains(runtime);
+        return runtime is not null && _internal.ContainsValue(runtime);
     }
 
     internal void RemoveRuntime(PluginRuntime runtime)
@@ -69,9 +68,8 @@ public sealed class RegistryService
     {
         if (TryResolve(plugin, out var key, out _))
         {
-            if (_internal.TryGetValue(key, out var runtime))
+            if (_internal.Remove(key, out var runtime))
             {
-                _internal.Remove(key);
                 foreach (var fiber in runtime.Fibers.Snapshot())
                 {
                     _ = fiber.DisposePluginAsync();
@@ -87,9 +85,8 @@ public sealed class RegistryService
     {
         if (TryResolve(plugin, out var key, out _))
         {
-            if (_internal.TryGetValue(key, out var runtime))
+            if (_internal.Remove(key, out var runtime))
             {
-                _internal.Remove(key);
                 foreach (var fiber in runtime.Fibers.Snapshot())
                 {
                     await fiber.DisposePluginAsync();
@@ -102,7 +99,7 @@ public sealed class RegistryService
 
     internal IEnumerable<PluginRuntime> Values() => _internal.Values;
 
-    private bool TryResolve(object plugin, out object key, out PluginRuntime runtime)
+    private static bool TryResolve(object plugin, out object key, out PluginRuntime runtime)
     {
         key = null!;
         runtime = null!;
@@ -180,7 +177,7 @@ public sealed class RegistryService
         var runtime = new PluginRuntime
         {
             // compiler-generated names (lambdas) walk up to the nearest named plugin/root
-            Name = method.Name.StartsWith("<") ? null : method.Name,
+            Name = method.Name.StartsWith('<') ? null : method.Name,
             Callback = (ctx, config) =>
             {
                 try
@@ -208,7 +205,7 @@ public sealed class RegistryService
         return new PluginRuntime
         {
             Name = obj.Name,
-            Callback = (ctx, config) => obj.Apply(ctx, config),
+            Callback = obj.Apply,
         };
     }
 

@@ -29,6 +29,7 @@ Microsoft.Extensions 集成拆分到了独立的扩展包：
 ```
 dotnet add package CordiSharp.Extensions.DependencyInjection   # AddCordiSharp、CordiSharpOptions、ctx.Resolve<T>()
 dotnet add package CordiSharp.Extensions.Hosting               # CordiSharpHost（IHostedService）、AddCordiSharpHosting
+dotnet add package CordiSharp.Extensions.Logging               # AddCordiSharpLogging、CordiSharpLogExporter、UseLoggerFactory
 ```
 
 ## 快速上手
@@ -161,6 +162,26 @@ await host.StopAsync();                                     // 卸载它们
 额外把 `CordiSharpHost` 注册为 `IHostedService`，可直接配合 `Microsoft.Extensions.Hosting`
 的 `Host.CreateApplicationBuilder` 使用。
 
+## Microsoft.Extensions.Logging
+
+`CordiSharp.Extensions.Logging` 把 CordiSharp 日志系统接入标准 .NET 日志管线：
+
+- `builder.Logging.AddCordiSharpLogging()` —— 注册 `CordiSharpLoggerProvider`，MEL 的
+  `ILogger<T>` 条目写入根上下文的 `LoggerService`；
+- `ctx.UseLoggerFactory(factory)` —— 挂载 `CordiSharpLogExporter`，`ctx.Logger()` 的输出
+  转发到 MEL 管线（控制台、文件等）。两个方向可同时使用（重入保护，不会回环）。
+
+```csharp
+using CordiSharp.Extensions.Logging;
+
+var builder = Host.CreateApplicationBuilder(args);
+builder.Logging.AddCordiSharpLogging();   // MEL → CordiSharp
+
+var host = builder.Build();
+host.Services.GetRequiredService<Context>()
+    .UseLoggerFactory(host.Services.GetRequiredService<ILoggerFactory>()); // CordiSharp → MEL
+```
+
 ## 源生成器
 
 标有 `[Plugin]` 的类在编译期被发现；生成器会生成一个
@@ -184,7 +205,8 @@ await host.StopAsync();                                     // 卸载它们
   dotnet run --project samples/CordiSharp.Samples.Basic
   ```
 - `CordiSharp.Samples.Msdi` —— 将 CordiSharp 托管进 `Microsoft.Extensions.Hosting`；
-  插件随主机启停，插件类通过构造函数注入 MSDI 服务，一个计时器插件向另一个插件发事件。
+  插件随主机启停，插件类通过构造函数注入 MSDI 服务，一个计时器插件向另一个插件发事件，
+  并把 `ctx.Logger()` 的输出桥接到主机的控制台日志。
   ```
   dotnet run --project samples/CordiSharp.Samples.Msdi
   ```
@@ -212,6 +234,7 @@ dotnet test test/CordiSharp.Tests
 dotnet pack src/CordiSharp/CordiSharp.csproj -c Release    # 入口包（运行时 + 分析器）
 dotnet pack src/CordiSharp.Extensions.DependencyInjection/CordiSharp.Extensions.DependencyInjection.csproj -c Release
 dotnet pack src/CordiSharp.Extensions.Hosting/CordiSharp.Extensions.Hosting.csproj -c Release
+dotnet pack src/CordiSharp.Extensions.Logging/CordiSharp.Extensions.Logging.csproj -c Release
 dotnet pack src/CordiSharp.Generators/CordiSharp.Generators.csproj -c Release
 dotnet pack src/CordiSharp.Analyzers/CordiSharp.Analyzers.csproj -c Release
 ```

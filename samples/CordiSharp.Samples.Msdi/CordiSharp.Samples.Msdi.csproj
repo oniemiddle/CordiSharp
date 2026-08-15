@@ -9,6 +9,7 @@
     <ProjectReference Include="..\..\src\CordiSharp\CordiSharp.csproj" />
     <ProjectReference Include="..\..\src\CordiSharp.Extensions.DependencyInjection\CordiSharp.Extensions.DependencyInjection.csproj" />
     <ProjectReference Include="..\..\src\CordiSharp.Extensions.Hosting\CordiSharp.Extensions.Hosting.csproj" />
+    <ProjectReference Include="..\..\src\CordiSharp.Extensions.Logging\CordiSharp.Extensions.Logging.csproj" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
   </ItemGroup>
 </Project>

@@ -1,9 +1,7 @@
 namespace CordiSharp.Registry;
 
 /// <summary>Marker interface for plugin classes.</summary>
-public interface IPlugin
-{
-}
+public interface IPlugin;
 
 /// <summary>A plugin class with a synchronous load method.</summary>
 public interface IPlugin<in TConfig> : IPlugin
@@ -37,14 +35,10 @@ public sealed class PluginAttribute : Attribute
 
 /// <summary>Declares a required service injection on a plugin class or property.</summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Property, AllowMultiple = true)]
-public sealed class InjectAttribute(string name, object? config) : Attribute
+public sealed class InjectAttribute(string name, object? config = null) : Attribute
 {
     public string Name { get; } = name;
     public object? Config { get; } = config;
-
-    public InjectAttribute(string name) : this(name, null)
-    {
-    }
 }
 
 /// <summary>Declares the service name of a <see cref="Service"/> subclass.</summary>

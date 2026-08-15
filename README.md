@@ -29,6 +29,7 @@ Microsoft.Extensions integration lives in dedicated extension packages:
 ```
 dotnet add package CordiSharp.Extensions.DependencyInjection   # AddCordiSharp, CordiSharpOptions, ctx.Resolve<T>()
 dotnet add package CordiSharp.Extensions.Hosting               # CordiSharpHost (IHostedService), AddCordiSharpHosting
+dotnet add package CordiSharp.Extensions.Logging               # AddCordiSharpLogging, CordiSharpLogExporter, UseLoggerFactory
 ```
 
 ## Quick start
@@ -163,6 +164,27 @@ await host.StopAsync();                                     // unloads them
 Plugin classes can take MSDI services in their constructors (e.g. `(IGreeter greeter)` or
 `(Context ctx, IGreeter greeter)`); `ctx.Resolve<T>()` resolves from the attached provider.
 
+## Microsoft.Extensions.Logging
+
+`CordiSharp.Extensions.Logging` bridges CordiSharp's logger with the standard logging pipeline:
+
+- `builder.Logging.AddCordiSharpLogging()` — registers a `CordiSharpLoggerProvider` so MEL
+  `ILogger<T>` entries are written into the root context's `LoggerService`.
+- `ctx.UseLoggerFactory(factory)` — attaches a `CordiSharpLogExporter` so `ctx.Logger()`
+  output is forwarded to the MEL pipeline (console, file, ...). Both directions can be
+  combined safely (re-exported messages are not echoed back).
+
+```csharp
+using CordiSharp.Extensions.Logging;
+
+var builder = Host.CreateApplicationBuilder(args);
+builder.Logging.AddCordiSharpLogging();   // MEL -> CordiSharp
+
+var host = builder.Build();
+host.Services.GetRequiredService<Context>()
+    .UseLoggerFactory(host.Services.GetRequiredService<ILoggerFactory>()); // CordiSharp -> MEL
+```
+
 ## Source generator
 
 Classes annotated with `[Plugin]` are discovered at compile time; the generator emits a
@@ -197,7 +219,8 @@ Two runnable samples live in `samples/`:
   ```
 - `CordiSharp.Samples.Msdi` — hosts CordiSharp inside `Microsoft.Extensions.Hosting`;
   plugins are loaded/unloaded with the host, plugin classes receive MSDI services
-  via constructor injection, and a timer plugin emits events consumed by another.
+  via constructor injection, a timer plugin emits events consumed by another, and
+  `ctx.Logger()` output is bridged into the host's console logging.
   ```
   dotnet run --project samples/CordiSharp.Samples.Msdi
   ```
@@ -218,6 +241,7 @@ dotnet test test/CordiSharp.Tests
 dotnet pack src/CordiSharp/CordiSharp.csproj -c Release    # entry package (runtime + analyzers)
 dotnet pack src/CordiSharp.Extensions.DependencyInjection/CordiSharp.Extensions.DependencyInjection.csproj -c Release
 dotnet pack src/CordiSharp.Extensions.Hosting/CordiSharp.Extensions.Hosting.csproj -c Release
+dotnet pack src/CordiSharp.Extensions.Logging/CordiSharp.Extensions.Logging.csproj -c Release
 dotnet pack src/CordiSharp.Generators/CordiSharp.Generators.csproj -c Release
 dotnet pack src/CordiSharp.Analyzers/CordiSharp.Analyzers.csproj -c Release
 ```

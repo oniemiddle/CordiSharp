@@ -9,6 +9,7 @@
     <Project Path="src/CordiSharp.Analyzers/CordiSharp.Analyzers.csproj" />
     <Project Path="src/CordiSharp.Extensions.DependencyInjection/CordiSharp.Extensions.DependencyInjection.csproj" />
     <Project Path="src/CordiSharp.Extensions.Hosting/CordiSharp.Extensions.Hosting.csproj" />
+    <Project Path="src/CordiSharp.Extensions.Logging/CordiSharp.Extensions.Logging.csproj" />
     <Project Path="src/CordiSharp.Generators/CordiSharp.Generators.csproj" />
   </Folder>
   <Folder Name="/test/">

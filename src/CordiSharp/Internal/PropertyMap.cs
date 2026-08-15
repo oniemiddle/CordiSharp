@@ -21,8 +21,7 @@ public sealed class PropertyMap<TValue>(PropertyMap<TValue>? parent = null)
     /// if none exists anywhere (mirrors <c>ctx.root[isolate][name] ??= Symbol(name)</c>).</summary>
     public TValue GetOrCreateRoot(string name, Func<TValue> factory)
     {
-        if (_own.TryGetValue(name, out var value)) return value;
-        if (Parent is not null && Parent.TryGet(name, out value!)) return value;
+        if (_own.TryGetValue(name, out var value) || Parent is not null && Parent.TryGet(name, out value!)) return value;
         // walk to the very top (root map) and create there
         var root = this;
         while (root.Parent is not null) root = root.Parent;

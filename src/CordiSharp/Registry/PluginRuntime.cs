@@ -9,7 +9,7 @@ public sealed class PluginRuntime
     internal string? Name;
     internal Type? PluginType;
     internal Schema.Schema? ConfigSchema;
-    internal Dictionary<string, object?> Inject = new();
+    internal readonly Dictionary<string, object?> Inject = new();
     internal Func<Context, object?, object?> Callback = null!;
     internal readonly DisposableList<Fiber> Fibers = new();
 

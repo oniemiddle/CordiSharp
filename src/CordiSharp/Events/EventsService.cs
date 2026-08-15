@@ -293,8 +293,7 @@ public sealed class EventsService
     {
         var queue = new Queue<SyncCallback>(callbacks);
         var inner = args.ToArray();
-        Func<object?> next = null!;
-        next = () =>
+        var next = () =>
         {
             if (queue.Count > 0)
             {

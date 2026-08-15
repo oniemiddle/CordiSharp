@@ -30,8 +30,7 @@ internal static class PluginLoader
         {
             var init = service.RunInit();
             if (init is Task task) return AwaitInitAndDispose(instance, task);
-            if (init is not null) return init;
-            return RegisterDisposal(instance);
+            return init ?? RegisterDisposal(instance);
         }
         return RegisterDisposal(instance);
     }
@@ -63,17 +62,14 @@ internal static class PluginLoader
         return RegisterDisposal(instance);
     }
 
-    private static object? RegisterDisposal(object instance)
+    private static Disposer? RegisterDisposal(object instance)
     {
-        if (instance is IAsyncDisposable asyncDisposable)
+        return instance switch
         {
-            return Disposer.From(() => asyncDisposable.DisposeAsync());
-        }
-        if (instance is IDisposable disposable)
-        {
-            return Disposer.From(disposable.Dispose);
-        }
-        return null;
+            IAsyncDisposable asyncDisposable => Disposer.From(() => asyncDisposable.DisposeAsync()),
+            IDisposable disposable => Disposer.From(disposable.Dispose),
+            _ => null
+        };
     }
 
     private static object CreateInstance(Context ctx, Type type, object? config)

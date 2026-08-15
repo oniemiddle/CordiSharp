@@ -6,34 +6,32 @@ namespace CordiSharp.Registry;
 /// Mirrors the promise-like fiber wrapper of cordis <c>ctx.plugin()</c>.</summary>
 public sealed class PluginHandle
 {
-    private readonly Fiber _fiber;
-
-    internal PluginHandle(Fiber fiber) => _fiber = fiber;
+    internal PluginHandle(Fiber fiber) => Fiber = fiber;
 
     /// <summary>The underlying fiber.</summary>
-    public Fiber Fiber => _fiber;
+    public Fiber Fiber { get; }
 
-    public FiberState State => _fiber.State;
+    public FiberState State => Fiber.State;
 
-    public object? Config => _fiber.Config;
+    public object? Config => Fiber.Config;
 
-    public Context Ctx => _fiber.Ctx;
+    public Context Ctx => Fiber.Ctx;
 
     /// <summary>Awaits the fiber until it settles; throws if loading failed.</summary>
-    public Task<Fiber> Await() => _fiber.Await();
+    public Task<Fiber> Await() => Fiber.Await();
 
     public TaskAwaiter<Fiber> GetAwaiter() => Await().GetAwaiter();
 
     /// <summary>Updates the plugin config and restarts the fiber.</summary>
-    public void Update(object? config, bool noSave = false) => _fiber.Update(config, noSave);
+    public void Update(object? config, bool noSave = false) => Fiber.Update(config, noSave);
 
     /// <summary>Restarts the fiber (unload + reload).</summary>
-    public Task Restart() => _fiber.Restart();
+    public Task Restart() => Fiber.Restart();
 
     /// <summary>Unloads and disposes the plugin fiber.</summary>
-    public ValueTask DisposeAsync() => _fiber.DisposePluginAsync();
+    public ValueTask DisposeAsync() => Fiber.DisposePluginAsync();
 
-    public void Dispose() => _ = _fiber.DisposePluginAsync();
+    public void Dispose() => _ = Fiber.DisposePluginAsync();
 
-    public override string ToString() => $"PluginHandle <{_fiber.Name}>";
+    public override string ToString() => $"PluginHandle <{Fiber.Name}>";
 }

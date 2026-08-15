@@ -20,7 +20,7 @@ public sealed class PluginMetadata(
 public static class PluginMetadataRegistry
 {
     private static readonly Dictionary<Type, PluginMetadata> Registry = new();
-    private static readonly object Gate = new();
+    private static readonly Lock Gate = new();
 
     public static void Register(Type pluginType, PluginMetadata metadata)
     {
@@ -34,7 +34,7 @@ public static class PluginMetadataRegistry
     {
         lock (Gate)
         {
-            return Registry.TryGetValue(pluginType, out var metadata) ? metadata : null;
+            return Registry.GetValueOrDefault(pluginType);
         }
     }
 
