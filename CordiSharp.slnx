@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/CordiSharp.Samples.Basic/CordiSharp.Samples.Basic.csproj" />
+    <Project Path="samples/CordiSharp.Samples.Msdi/CordiSharp.Samples.Msdi.csproj" />
+    <Project Path="samples/CordiSharp.Samples.PluginHost/CordiSharp.Samples.PluginHost.csproj" />
+    <Project Path="samples/CordiSharp.Samples.PluginLibrary/CordiSharp.Samples.PluginLibrary.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/CordiSharp.Analyzers/CordiSharp.Analyzers.csproj" />
+    <Project Path="src/CordiSharp.Extensions.DependencyInjection/CordiSharp.Extensions.DependencyInjection.csproj" />
+    <Project Path="src/CordiSharp.Extensions.Hosting/CordiSharp.Extensions.Hosting.csproj" />
+    <Project Path="src/CordiSharp.Generators/CordiSharp.Generators.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/CordiSharp.Tests/CordiSharp.Tests.csproj" />
+  </Folder>
+  <Project Path="src/CordiSharp/CordiSharp.csproj" />
+</Solution>

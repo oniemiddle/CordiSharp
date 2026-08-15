@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <PackageId>CordiSharp</PackageId>
+    <AssemblyName>CordiSharp</AssemblyName>
+    <RootNamespace>CordiSharp</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <Title>CordiSharp</Title>
+    <ImplicitUsings>true</ImplicitUsings>
+    <Description>A C# port of the Cordis meta-framework: context/scope-based plugin system, services, events and lifecycle management. Includes source generator and Roslyn analyzers in one package; Microsoft.Extensions.DependencyInjection and Hosting integration ship separately in CordiSharp.Extensions.* packages.</Description>
+    <PackageTags>cordis;plugin;lifecycle;context;framework</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Dev-time analyzers/generators; their DLLs are also shipped inside this package below. -->
+    <ProjectReference Include="..\CordiSharp.Generators\CordiSharp.Generators.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" PrivateAssets="all" />
+    <ProjectReference Include="..\CordiSharp.Analyzers\CordiSharp.Analyzers.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Ship the generator and analyzer inside the entry package so a single PackageReference
+         delivers runtime + analyzers + generator to consumers. -->
+    <None Include="..\CordiSharp.Generators\bin\$(Configuration)\netstandard2.0\CordiSharp.Generators.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <None Include="..\CordiSharp.Analyzers\bin\$(Configuration)\netstandard2.0\CordiSharp.Analyzers.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+  </ItemGroup>
+
+</Project>
