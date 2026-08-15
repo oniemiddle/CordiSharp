@@ -4,7 +4,7 @@ using CordiSharp.Extensions.DependencyInjection;
 using CordiSharp.Extensions.Hosting;
 using CordiSharp.Extensions.Logging;
 using CordiSharp.Registry;
-using CordiSharp.Samples.Msdi;
+using CordiSharp.Samples.Extensions;
 using CordiSharp.Schema;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -44,7 +44,7 @@ Console.ReadLine();
 await host.StopAsync();
 Console.WriteLine("host stopped");
 
-namespace CordiSharp.Samples.Msdi
+namespace CordiSharp.Samples.Extensions
 {
     // ============================ plugin definitions ===========================
 

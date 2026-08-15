@@ -1,7 +1,7 @@
 <Solution>
   <Folder Name="/samples/">
     <Project Path="samples/CordiSharp.Samples.Basic/CordiSharp.Samples.Basic.csproj" />
-    <Project Path="samples/CordiSharp.Samples.Msdi/CordiSharp.Samples.Msdi.csproj" />
+    <Project Path="samples/CordiSharp.Samples.Extensions/CordiSharp.Samples.Extensions.csproj" />
     <Project Path="samples/CordiSharp.Samples.PluginHost/CordiSharp.Samples.PluginHost.csproj" />
     <Project Path="samples/CordiSharp.Samples.PluginLibrary/CordiSharp.Samples.PluginLibrary.csproj" />
   </Folder>
