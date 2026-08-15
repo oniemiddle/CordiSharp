@@ -1,5 +1,6 @@
 using System.Reflection;
 using CordiSharp;
+using CordiSharp.Loading;
 using CordiSharp.Registry;
 using CordiSharp.Samples.PluginLibrary;
 
@@ -44,5 +45,24 @@ Console.WriteLine($"counter after update: {root.Get<int>("counter")}");
 
 await discovered.DisposeAsync();
 Console.WriteLine($"isolated counter after dispose: {(isolated.Get("counter") as int?)?.ToString() ?? "null"}");
+
+// ---- 6. "loading external assemblies" is itself a plugin ---------------------
+// 加载 AssemblyLoaderService（服务名 "loader"）后，任何插件都可以 [Inject("loader")]
+// 拿到它。插件程序集被放入可回收的 AssemblyLoadContext，卸载时释放所有引用并 Unload。
+// 用 isolate 作用域避免与第 1 节默认加载的 "counter" 服务名冲突。
+var alcScope = root.Isolate("counter");
+await alcScope.Plugin(typeof(AssemblyLoaderService));
+var loader = alcScope.Get<AssemblyLoaderService>("loader")!;
+var set = loader.LoadAssembly(typeof(CounterPlugin).Assembly.Location);
+Console.WriteLine($"ALC discovered: {string.Join(", ", set.Plugins.Select(p => p.Name))}");
+
+var alcCounter = set.LoadPlugin("counter", new Dictionary<string, object?> { ["Start"] = 7 });
+await alcCounter;
+Console.WriteLine($"ALC counter value: {alcScope.Get<int>("counter")}");
+
+// verify: true（默认）会做强制 GC + 弱引用校验，卸载失败时抛 AssemblyUnloadException；
+// 这里用 verify: false 以便在任何环境（含沙箱）都能跑通
+await set.UnloadAsync(verify: false);
+Console.WriteLine($"ALC counter after unload: {(alcScope.Get("counter") as int?)?.ToString() ?? "null"}");
 
 Console.WriteLine("\nCross-assembly sample done.");

@@ -1,0 +1,153 @@
+using System.Reflection;
+using System.Runtime.Loader;
+using CordiSharp.Registry;
+
+namespace CordiSharp.Loading;
+
+/// <summary>A plugin service that loads external plugin assemblies into collectible
+/// <see cref="AssemblyLoadContext"/>s and unloads them. It is a normal CordiSharp plugin:
+/// load it with <c>await root.Plugin(typeof(AssemblyLoaderService))</c>, then other plugins
+/// can <c>[Inject("loader")]</c> it (the service registers under the name <c>"loader"</c>).
+/// Unloading the loader service itself cascades to every assembly it loaded.</summary>
+[Service("loader")]
+public sealed class AssemblyLoaderService(Context ctx) : Service(ctx)
+{
+    private readonly List<AssemblyPluginSet> _sets = [];
+
+    /// <summary>Number of assemblies currently loaded by this service.</summary>
+    public int LoadedCount => _sets.Count;
+
+    /// <summary>Loads an external plugin assembly into a new collectible load context and
+    /// discovers its plugins (<c>[Plugin]</c> classes, <see cref="Service"/> subclasses and
+    /// <see cref="IPlugin"/> implementations).</summary>
+    public AssemblyPluginSet LoadAssembly(string assemblyPath)
+    {
+        var fullPath = Path.GetFullPath(assemblyPath);
+        var name = "plugin:" + Path.GetFileNameWithoutExtension(fullPath);
+        var directory = Path.GetDirectoryName(fullPath) ?? ".";
+        var alc = new PluginAssemblyLoadContext(name, directory);
+        Assembly assembly;
+        try
+        {
+            assembly = alc.LoadFromAssemblyPath(fullPath);
+        }
+        catch (Exception error)
+        {
+            alc.Unload();
+            throw new CordisException($"""cannot load assembly "{fullPath}": {error.Message}""", error);
+        }
+
+        var plugins = Discover(assembly);
+        var set = new AssemblyPluginSet(this, name, fullPath, alc, assembly, plugins);
+        _sets.Add(set);
+        return set;
+    }
+
+    /// <summary>Unloads an assembly: disposes every plugin fiber created from it, drops all
+    /// strong references into the assembly and unloads its load context. When
+    /// <paramref name="verify"/> is true (default), a bounded forced-GC loop checks that the
+    /// context is actually collected and throws <see cref="AssemblyUnloadException"/> if
+    /// strong references to its types are still held.</summary>
+    public async ValueTask UnloadAsync(AssemblyPluginSet set, bool verify = true)
+    {
+        if (set.IsUnloaded) return;
+        var alc = set.ALC ?? throw new CordisException("assembly set is already unloaded");
+        var weak = new WeakReference<AssemblyLoadContext>(alc);
+
+        foreach (var runtime in set.Runtimes.ToList())
+        {
+            foreach (var fiber in runtime.Fibers.Snapshot())
+            {
+                await fiber.DisposePluginAsync();
+                // buffered log messages hold the fiber; drop them so it can be collected
+                Ctx.LoggerService.DropFiberLogs(fiber);
+            }
+        }
+
+        set.MarkUnloaded();
+        _sets.Remove(set);
+
+        alc.Unload();
+        // drop the strong local reference before the verification loop: the GC loop
+        // cannot collect the ALC while this frame/state-machine still roots it
+        alc = null!;
+        if (verify && !WaitForUnload(weak))
+        {
+            throw new AssemblyUnloadException(
+                $"""assembly "{set.AssemblyPath}" could not be unloaded: strong references to its types are still held. """ +
+                "Release every AssemblyPluginHandle / PluginHandle, config object, AssemblyPluginInfo and Type " +
+                "obtained from this assembly before unloading, and make sure no plugin code is still running.");
+        }
+    }
+
+    internal AssemblyPluginHandle LoadPlugin(AssemblyPluginSet set, AssemblyPluginInfo info, object? config)
+    {
+        var type = info.Type ?? throw new CordisException($"""plugin "{info.Name}" belongs to an unloaded assembly""");
+        var runtime = AssemblyPluginRuntimeFactory.Create(type);
+        config = AssemblyPluginRuntimeFactory.MaterializeConfig(info.ConfigType, info.ConfigSchema, config);
+        set.Runtimes.Add(runtime);
+        Ctx.Registry.RegisterRuntime(type, runtime);
+        var fiber = new Fiber(Ctx, config, runtime.Inject, runtime);
+        return new AssemblyPluginHandle(fiber, set);
+    }
+
+    protected override object Init() => Disposer.From(async Task () =>
+    {
+        // best-effort cascade: no strict GC verification during shutdown
+        foreach (var set in _sets.ToList())
+        {
+            await UnloadAsync(set, verify: false);
+        }
+    });
+
+    private static List<AssemblyPluginInfo> Discover(Assembly assembly)
+    {
+        var result = new List<AssemblyPluginInfo>();
+        foreach (var type in assembly.GetExportedTypes())
+        {
+            if (type.IsAbstract) continue;
+            var isPlugin = type.GetCustomAttribute<PluginAttribute>(inherit: false) is not null
+                || typeof(Service).IsAssignableFrom(type)
+                || typeof(IPlugin).IsAssignableFrom(type);
+            if (!isPlugin) continue;
+
+            var attr = type.GetCustomAttributes(typeof(PluginAttribute), inherit: false).FirstOrDefault() as PluginAttribute;
+            var name = attr?.Name ?? type.Name;
+            var configType = attr?.ConfigType ?? FindConfigType(type);
+            var schema = configType is not null ? Schema.Schema.FromType(configType) : null;
+            var injects = type.GetCustomAttributes(typeof(InjectAttribute), inherit: true)
+                .Cast<InjectAttribute>()
+                .Select(i => i.Name)
+                .ToList();
+            result.Add(new AssemblyPluginInfo(name, type, configType, schema, injects));
+        }
+        return result;
+    }
+
+    private static Type? FindConfigType(Type type)
+    {
+        foreach (var iface in type.GetInterfaces())
+        {
+            if (!iface.IsGenericType) continue;
+            var def = iface.GetGenericTypeDefinition();
+            if (def == typeof(IPlugin<>) || def == typeof(IAsyncPlugin<>))
+            {
+                return iface.GetGenericArguments()[0];
+            }
+        }
+        return null;
+    }
+
+    private static bool WaitForUnload(WeakReference<AssemblyLoadContext> weak)
+    {
+        for (var i = 0; i < 10; i++)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            if (!weak.TryGetTarget(out _)) return true;
+            Thread.Sleep(20);
+        }
+        return !weak.TryGetTarget(out _);
+    }
+}

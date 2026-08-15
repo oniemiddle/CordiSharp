@@ -142,6 +142,10 @@ public sealed partial class LoggerService
         return new Logger(this, name, null);
     }
 
+    /// <summary>Removes buffered log messages that reference the given fiber (used by the
+    /// assembly loader before unloading a plugin assembly, so the fiber can be collected).</summary>
+    internal void DropFiberLogs(Fiber fiber) => Buffer.RemoveAll(m => ReferenceEquals(m.Fiber, fiber));
+
     public void Error(object? format, params object?[] args) => Log(_ctx.Name, LogLevel.Error, format, args);
     public void Warn(object? format, params object?[] args) => Log(_ctx.Name, LogLevel.Warn, format, args);
     public void Info(object? format, params object?[] args) => Log(_ctx.Name, LogLevel.Info, format, args);

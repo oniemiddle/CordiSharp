@@ -47,6 +47,10 @@ public sealed class RegistryService
         return Plugin(ctx, typeof(TPlugin), config);
     }
 
+    /// <summary>Registers a plugin runtime under an explicit key without rebuilding it from
+    /// a type (used by the assembly loader for types loaded from collectible load contexts).</summary>
+    internal void RegisterRuntime(object key, PluginRuntime runtime) => _internal[key] = runtime;
+
     internal PluginRuntime? GetRuntime(object plugin)
     {
         return TryResolve(plugin, out var key, out _) ? _internal.GetValueOrDefault(key) : null;

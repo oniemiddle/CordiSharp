@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.Loader;
 
 namespace CordiSharp.Registry;
 
@@ -47,6 +48,7 @@ public static class PluginMetadataRegistry
         }
         foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
         {
+            if (AssemblyLoadContext.GetLoadContext(assembly) is { IsCollectible: true }) continue;
             var type = assembly.GetType("CordiSharp.Generated.PluginRegistrations");
             if (type is null) continue;
             var method = type.GetMethod("RegisterAll", BindingFlags.Public | BindingFlags.Static);
