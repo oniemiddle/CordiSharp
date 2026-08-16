@@ -7,6 +7,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\CordiSharp\CordiSharp.csproj" />
+    <ProjectReference Include="..\..\src\CordiSharp.Generators\CordiSharp.Generators.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" />
+    <ProjectReference Include="..\..\src\CordiSharp.Analyzers\CordiSharp.Analyzers.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" />
     <ProjectReference Include="..\CordiSharp.Samples.PluginLibrary\CordiSharp.Samples.PluginLibrary.csproj" />
   </ItemGroup>
 </Project>

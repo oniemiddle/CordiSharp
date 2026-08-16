@@ -84,7 +84,7 @@ public sealed class CordiSharpServiceCatalogGenerator : IIncrementalGenerator
             if (iface.TypeKind != TypeKind.Interface) continue;
             if (SymbolEqualityComparer.Default.Equals(iface.ContainingAssembly, ctx.SemanticModel.Compilation.Assembly)) continue;
             // skip only the CordiSharp CORE assembly (IPlugin, IContextFilter...);
-            // contracts in other assemblies (e.g. CordiSharp.Samples.Contracts) are kept
+            // contracts declared in other referenced assemblies are kept
             if (string.Equals(iface.ContainingAssembly.Name, "CordiSharp", StringComparison.Ordinal)) continue;
             interfaces.Add(iface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
         }

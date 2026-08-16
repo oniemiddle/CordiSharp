@@ -7,6 +7,5 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\CordiSharp\CordiSharp.csproj" />
     <ProjectReference Include="..\..\src\CordiSharp.Generators\CordiSharp.Generators.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" />
-    <ProjectReference Include="..\CordiSharp.Samples.Contracts\CordiSharp.Samples.Contracts.csproj" />
   </ItemGroup>
 </Project>
