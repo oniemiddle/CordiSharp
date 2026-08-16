@@ -74,7 +74,7 @@ PluginMetadataRegistry.Register(typeof(MyPlugin), new PluginMetadata(
 
 ## 分析器
 
-分析器验证插件声明，产生三个诊断：
+分析器验证插件声明，产生四个诊断：
 
 ### CORDIS001 —— 配置属性类型无法用 schema 表示（警告）
 
@@ -105,6 +105,15 @@ public class BadPlugin : IPlugin<Config>
 ```
 
 插件类（标注 `[Plugin]` 或实现 `IPlugin<T>`）必须至少有一个公共构造函数，否则 CordiSharp 无法实例化。
+
+### CORDIS005 —— `[Import]` 的 `Alias` 不是合法标识符（错误）
+
+`[Import]` 的可选别名用作生成的 `ctx.&lt;Alias&gt;` 扩展属性名，必须是合法的 C# 标识符：
+
+```csharp
+[Import("greeter", Alias = "123 bad")]   // ❌ CORDIS005
+[Import("greeter", Alias = "Greeter")]   // ✅
+```
 
 ## 禁用 / 关闭
 

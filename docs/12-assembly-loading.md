@@ -147,37 +147,49 @@ greeter.Greet("cordis");
 - `GetService<T>()`（免名）依赖目录；`GetService<T>(name)`（具名）
   不依赖目录，适用于插件未用生成器、或契约完全由宿主临时定义（按方法名适配）的场景。
 
-## [Import]：契约接口由源生成器在宿主侧生成
+## [Import] / [Inject]：契约接口由源生成器生成
 
-共享契约（如手写 `IGreeter`）不是必须的：宿主引用插件库，用
-`[Import("XX")]` 标注所需服务，**源生成器在宿主侧**完成一切：
+共享契约（如手写 `IGreeter`）不是必须的：**源生成器在引用方侧**生成一切。
+
+### 宿主入口 —— `[assembly: Import(name, Alias?)]`（程序集级）
+
+宿主（应用根 Context 的所有者）引用插件库，在程序集级标注：
 
 ```csharp
-// 宿主（H）引用插件库（L），标注所需服务：
-[Import("greeter")]
-public static class HostImports { }
+[assembly: Import("greeter")]
+[assembly: Import("echo", Alias = "Echo")]
 
-// 源生成器（CordiSharpImportGenerator，安装在 H）：
-//   1. 在 L 里找到 [Service("greeter")] 的实现类型 GreeterService（T1）
-//   2. 在 H 生成镜像接口 IGreeterService（T1 的公共方法/属性）+ 弱引用桥实现
-//   3. 在 H 生成 C#14 扩展属性 ctx.greeter（名称即 Import 名）
+// 源生成器（CordiSharpImportGenerator）：
+//   1. 在插件库里找到 [Service("greeter")] 的实现类型 GreeterService（T1）
+//   2. 生成镜像接口 IGreeterService（T1 的公共方法/属性）+ 弱引用桥实现
+//   3. 生成 C#14 扩展属性 ctx.greeter / ctx.Echo（名称 = Import 名或别名）
 
 await set.LoadPlugin("GreeterService");
-var greeting = ctx.greeter.Greet("cordis");   // 强类型接口，桥接到 ALC 里的插件实例
+var greeting = ctx.greeter.Greet("cordis");   // root 解析（宿主视角，忽略 isolate）
 ```
 
-要点：
+### 插件侧 —— `[Inject(name, Alias)]`（类级，别名触发访问器）
 
-- `ctx.XX` 是 C#14 扩展属性（`extension(Context ctx)`），由生成器输出，
-  名称 = `[Import]` 的名字；接口名 = `I` + 实现类型名。
+"注入即导入"：既有依赖语义（fiber 保持 Pending 直到服务可用、服务移除自动卸载），
+又额外生成类型安全访问器，解析走 **fiber 链（isolate 感知）**：
+
+```csharp
+[Inject("greeter", Alias = "Greeter")]
+public class DependentPlugin : IPlugin<...>
+{
+    public void Load(Context ctx, ...) => ctx.Greeter.Greet("cordis");
+}
+```
+
+要点（两者共用）：
+
+- `ctx.XX` 是 C#14 扩展属性；接口名 = `I` + 实现类型名；**别名**只改
+  访问器属性名（`ctx.Echo`），服务仍按原名解析。
 - 生成的桥持有插件服务的 **`WeakReference`**（不 pin），按方法名转发；
   卸载后调用抛 `PluginUnloadedException`。
-- 生成接口**不引用插件库的本地类型**：签名中出现插件库类型的成员会被跳过
-  （否则宿主运行时会被迫把插件库加载进默认 ALC）。建议服务方法的参数/返回值使用
-  框架类型或共享 DTO。
-- 宿主仅编译期引用插件库（供生成器扫描），运行时从不触碰其类型 → 插件库只存在于
-  可回收 ALC 中，卸载干净。
-- 找不到实现类型时生成器报 `CORDIS004`（错误）。
+- 生成接口**不引用插件库的本地类型**：签名中出现插件库类型的成员会被跳过。
+- 宿主仅编译期引用插件库，运行时从不触碰其类型 → 插件库只存在于可回收 ALC 中。
+- 找不到实现类型报 `CORDIS004`；别名非法标识符报 `CORDIS005`。
 
 ## 卸载规则（重要）
 

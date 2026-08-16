@@ -83,6 +83,43 @@ public class AnalyzerTests
     }
 
     [Fact]
+    public void InvalidImportAlias_ReportsError()
+    {
+        var diagnostics = Analyze("""
+            using CordiSharp;
+            using CordiSharp.Registry;
+            [assembly: Import("greeter", Alias = "123 bad")]
+            """);
+        Assert.Contains(diagnostics, d => d.Id == "CORDIS005");
+    }
+
+    [Fact]
+    public void ValidImportAlias_NoError()
+    {
+        var diagnostics = Analyze("""
+            using CordiSharp;
+            using CordiSharp.Registry;
+            [assembly: Import("greeter", Alias = "Echo")]
+            """);
+        Assert.DoesNotContain(diagnostics, d => d.Id == "CORDIS005");
+    }
+
+    [Fact]
+    public void InvalidInjectAlias_ReportsError()
+    {
+        var diagnostics = Analyze("""
+            using CordiSharp;
+            using CordiSharp.Registry;
+            [Inject("greeter", Alias = "123 bad")]
+            public class P : IPlugin<object>
+            {
+                public void Load(Context ctx, object config) { }
+            }
+            """);
+        Assert.Contains(diagnostics, d => d.Id == "CORDIS005");
+    }
+
+    [Fact]
     public void ValidPlugin_NoDiagnostics()
     {
         var diagnostics = Analyze("""

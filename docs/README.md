@@ -27,6 +27,7 @@
 - [事件系统](05-events.md) —— `EventKey`、注册与分发模式、`EventOptions`、thisArg 过滤
 - [Effect 生命周期](06-effects.md) —— setup 返回值形式、收集与逆序卸载、诊断元数据
 - [外部程序集加载与卸载](12-assembly-loading.md) —— 可回收 ALC、`AssemblyLoaderService`（loader 插件）、卸载规则
+- [特性（Attribute）参考](13-attributes.md) —— `[Plugin]`/`[Inject]`/`[Service]`/`[Import]`/`[PluginConfig]`/`[DefaultValue]`/`[Required]` 全表
 - [配置 Schema](07-schema.md) —— `Schema` 工厂、校验、`FromType` 映射、`[PluginConfig]`/`[DefaultValue]`/`[Required]`
 - [日志系统](10-logging.md) —— `LoggerService`、`Logger`、`ILogExporter`、格式化、MEL 桥接
 

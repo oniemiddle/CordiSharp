@@ -4,7 +4,9 @@ using CordiSharp.Importing.Generated;
 using CordiSharp.Loading;
 using CordiSharp.Registry;
 using CordiSharp.Samples.PluginLibrary;
-using CordiSharp.Schema;
+
+// host-side imports are ASSEMBLY scoped: [assembly: Import(...)] generates the accessor
+[assembly: Import("greeter", Alias = "Greeter")]
 
 // =========================================================================
 // Cross-assembly plugin loading
@@ -67,7 +69,7 @@ Console.WriteLine($"ALC counter value: {alcScope.Get<int>("counter")}");
 // 生成器在 L 里找到实现类型 GreeterService，在 H 生成镜像接口 IGreeterService、
 // 弱引用桥和 C#14 扩展属性 ctx.greeter —— 不手写任何契约。
 await set.LoadPlugin("GreeterService");
-Console.WriteLine($"imported greeter: {alcScope.greeter.Greet("cordis")}");
+Console.WriteLine($"imported greeter: {alcScope.Greeter.Greet("cordis")}");
 
 // verify: true（默认）会做强制 GC + 弱引用校验，卸载失败时抛 AssemblyUnloadException；
 // 这里用 verify: false 以便在任何环境（含沙箱）都能跑通
@@ -80,9 +82,6 @@ Console.WriteLine("\nCross-assembly sample done.");
 
 static string TryGreeter(Context ctx)
 {
-    try { return ctx.greeter.Greet("cordis"); }
-    catch (CordiSharp.Loading.PluginUnloadedException) { return "PluginUnloadedException (expected)"; }
+    try { return ctx.Greeter.Greet("cordis"); }
+    catch (PluginUnloadedException) { return "PluginUnloadedException (expected)"; }
 }
-
-[Import("greeter")]
-public static class HostImports { }

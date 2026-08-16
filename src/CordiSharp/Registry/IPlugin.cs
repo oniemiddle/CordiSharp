@@ -33,12 +33,19 @@ public sealed class PluginAttribute : Attribute
     public PluginAttribute(string name) => Name = name;
 }
 
-/// <summary>Declares a required service injection on a plugin class or property.</summary>
+/// <summary>Declares a required service injection on a plugin class or property. When
+/// <see cref="Alias"/> is set (class-level only), the import source generator additionally
+/// emits a type-safe, isolate-aware <c>ctx.&lt;Alias&gt;</c> accessor (mirrored interface +
+/// weak bridge) — "injected, therefore importable".</summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Property, AllowMultiple = true)]
 public sealed class InjectAttribute(string name, object? config = null) : Attribute
 {
     public string Name { get; } = name;
     public object? Config { get; } = config;
+
+    /// <summary>Optional alias: when set on a class-level <c>[Inject]</c>, the generator
+    /// creates a <c>ctx.&lt;Alias&gt;</c> accessor for this injected service.</summary>
+    public string? Alias { get; set; }
 }
 
 /// <summary>Declares the service name of a <see cref="Service"/> subclass.</summary>

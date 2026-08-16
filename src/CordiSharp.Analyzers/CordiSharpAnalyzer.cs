@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace CordiSharp.Analyzers;
@@ -11,6 +12,7 @@ public sealed class CordiSharpAnalyzer : DiagnosticAnalyzer
     public const string PluginConfigUnsupportedProperty = "CORDIS001";
     public const string InjectEmptyName = "CORDIS002";
     public const string PluginNoPublicConstructor = "CORDIS003";
+    public const string InvalidImportAlias = "CORDIS005";
 
     private static readonly DiagnosticDescriptor PluginConfigUnsupportedPropertyRule = new(
         PluginConfigUnsupportedProperty,
@@ -36,8 +38,16 @@ public sealed class CordiSharpAnalyzer : DiagnosticAnalyzer
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    private static readonly DiagnosticDescriptor ImportInvalidAliasRule = new(
+        InvalidImportAlias,
+        "Invalid import alias",
+        "Alias '{0}' of [Import] is not a valid C# identifier and cannot be used as the generated ctx property name",
+        "CordiSharp.Plugins",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
-        [PluginConfigUnsupportedPropertyRule, InjectEmptyNameRule, PluginNoPublicConstructorRule];
+        [PluginConfigUnsupportedPropertyRule, InjectEmptyNameRule, PluginNoPublicConstructorRule, ImportInvalidAliasRule];
 
     public override void Initialize(AnalysisContext context)
     {
@@ -50,9 +60,22 @@ public sealed class CordiSharpAnalyzer : DiagnosticAnalyzer
             var injectAttr = start.Compilation.GetTypeByMetadataName("CordiSharp.Registry.InjectAttribute");
             var configAttr = start.Compilation.GetTypeByMetadataName("CordiSharp.Schema.PluginConfigAttribute");
             var iPlugin = start.Compilation.GetTypeByMetadataName("CordiSharp.Registry.IPlugin`1");
+            var importAttr = start.Compilation.GetTypeByMetadataName("CordiSharp.Registry.ImportAttribute");
 
-            start.RegisterSymbolAction(symbolContext => AnalyzeNamedType(symbolContext, pluginAttr, injectAttr, configAttr, iPlugin),
+            start.RegisterSymbolAction(
+                symbolContext => AnalyzeNamedType(symbolContext, pluginAttr, injectAttr, configAttr, iPlugin),
                 SymbolKind.NamedType);
+
+            // CORDIS005: assembly-level [Import] Alias must be a valid C# identifier
+            start.RegisterCompilationEndAction(compilationContext =>
+            {
+                if (importAttr is null) return;
+                foreach (var attribute in compilationContext.Compilation.Assembly.GetAttributes())
+                {
+                    if (!SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, importAttr)) continue;
+                    CheckImportAlias(attribute, compilationContext.ReportDiagnostic);
+                }
+            });
         });
     }
 
@@ -60,7 +83,7 @@ public sealed class CordiSharpAnalyzer : DiagnosticAnalyzer
         INamedTypeSymbol? injectAttr, INamedTypeSymbol? configAttr, INamedTypeSymbol? iPlugin)
     {
         var type = (INamedTypeSymbol)context.Symbol;
-        if (type.TypeKind != TypeKind.Class || type.IsStatic) return;
+        if (type.TypeKind != TypeKind.Class) return;
 
         // CORDIS002: empty inject names
         if (injectAttr is not null)
@@ -72,6 +95,16 @@ public sealed class CordiSharpAnalyzer : DiagnosticAnalyzer
                 {
                     context.ReportDiagnostic(Diagnostic.Create(InjectEmptyNameRule, type.Locations.FirstOrDefault()));
                 }
+            }
+        }
+
+        // CORDIS005: [Inject] Alias (class-level accessor request) must be a valid identifier
+        if (injectAttr is not null)
+        {
+            foreach (var attribute in type.GetAttributes())
+            {
+                if (!SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, injectAttr)) continue;
+                CheckImportAlias(attribute, context.ReportDiagnostic);
             }
         }
 
@@ -109,6 +142,22 @@ public sealed class CordiSharpAnalyzer : DiagnosticAnalyzer
                     }
                 }
                 break;
+            }
+        }
+    }
+
+    /// <summary>CORDIS005: reports when an [Import]/[Inject] Alias is not a valid C#
+    /// identifier (it becomes the generated ctx property name).</summary>
+    private static void CheckImportAlias(AttributeData attribute, Action<Diagnostic> report)
+    {
+        foreach (var named in attribute.NamedArguments)
+        {
+            if (named.Key != "Alias") continue;
+            var alias = named.Value.Value as string;
+            if (string.IsNullOrEmpty(alias) || !SyntaxFacts.IsValidIdentifier(alias))
+            {
+                var location = attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? Location.None;
+                report(Diagnostic.Create(ImportInvalidAliasRule, location, alias ?? "<empty>"));
             }
         }
     }

@@ -5,29 +5,46 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace CordiSharp.Generators;
 
-/// <summary>Host-side import generator: for every <c>[Import("name")]</c> annotation, finds
-/// the implementing <c>[Service]</c> type in a referenced plugin library, then generates in
-/// the host assembly a mirrored interface (the type's public members), a weak bridge that
-/// forwards calls to the runtime-loaded plugin instance, and a <c>ctx.&lt;name&gt;</c>
-/// accessor (C# 14 extension property) backed by <c>ImportResolver</c>.</summary>
+/// <summary>Generates type-safe service accessors from two sources:
+/// <list type="bullet">
+/// <item><c>[assembly: Import("name", Alias?)]</c> — host entry point; resolution goes
+/// through the root context (root scope, ignores isolates).</item>
+/// <item><c>[Inject("name", Alias = "...")]</c> on a class — plugin side; resolution goes
+/// through the fiber chain (isolate-aware). The alias requests the accessor.</item>
+/// </list>
+/// For each source it finds the implementing <c>[Service]</c> type in a referenced plugin
+/// library, then generates a mirrored interface (the type's public members), a weak bridge
+/// that forwards calls to the runtime-loaded plugin instance, and a <c>ctx.&lt;name|alias&gt;</c>
+/// C# 14 extension property backed by <c>ImportResolver</c>.</summary>
 [Generator(LanguageNames.CSharp)]
 public sealed class CordiSharpImportGenerator : IIncrementalGenerator
 {
     private const string ImportAttribute = "CordiSharp.Registry.ImportAttribute";
+    private const string InjectAttribute = "CordiSharp.Registry.InjectAttribute";
     private const string ServiceAttribute = "CordiSharp.Registry.ServiceAttribute";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
+        // assembly-level [Import] (host): root-scope resolution
         var imports = context.SyntaxProvider.ForAttributeWithMetadataName(
             ImportAttribute,
-            static (node, _) => node is ClassDeclarationSyntax,
-            static (ctx, ct) => CreateModels(ctx, ct));
+            static (node, _) => node is CompilationUnitSyntax,
+            static (ctx, ct) => CreateModels(ctx, rootScope: true))
+            .SelectMany(static (models, _) => models);
 
-        // one model per [Import] attribute (a type may declare several imports)
-        var compiled = imports.SelectMany(static (models, _) => models).Collect();
-        context.RegisterSourceOutput(compiled, static (spc, models) =>
+        // class-level [Inject(..., Alias)] (plugin): isolate-aware resolution
+        var injects = context.SyntaxProvider.ForAttributeWithMetadataName(
+            InjectAttribute,
+            static (node, _) => node is ClassDeclarationSyntax,
+            static (ctx, ct) => CreateModels(ctx, rootScope: false))
+            .SelectMany(static (models, _) => models);
+
+        var all = imports.Collect().Combine(injects.Collect());
+        context.RegisterSourceOutput(all, static (spc, pair) =>
         {
-            foreach (var group in models.GroupBy(m => m.Name, StringComparer.Ordinal))
+            // group by (scope, accessor name): a host [Import] and a plugin [Inject] may
+            // target the same service but resolve differently, so they are NOT merged
+            foreach (var group in pair.Left.Concat(pair.Right).GroupBy(m => (m.RootScope, m.Alias ?? m.Name)))
             {
                 var model = group.First();
                 if (model.Impl is null)
@@ -45,17 +62,18 @@ public sealed class CordiSharpImportGenerator : IIncrementalGenerator
     }
 
     private static System.Collections.Immutable.ImmutableArray<ImportModel> CreateModels(
-        GeneratorAttributeSyntaxContext ctx, CancellationToken ct)
+        GeneratorAttributeSyntaxContext ctx, bool rootScope)
     {
         var compilation = ctx.SemanticModel.Compilation;
-        var location = ctx.TargetSymbol.Locations.FirstOrDefault() ?? Location.None;
         var result = System.Collections.Immutable.ImmutableArray.CreateBuilder<ImportModel>();
-        foreach (var name in GetImportNames(ctx))
+        foreach (var (name, alias, location) in GetImports(ctx))
         {
+            // for [Inject], only an explicit Alias requests an accessor
+            if (!rootScope && alias is null) continue;
             var impl = FindImpl(compilation, name);
             if (impl is null)
             {
-                result.Add(new ImportModel(name, null, [], location));
+                result.Add(new ImportModel(name, alias, rootScope, null, [], location));
                 continue;
             }
             var members = new List<MemberModel>();
@@ -74,9 +92,27 @@ public sealed class CordiSharpImportGenerator : IIncrementalGenerator
                         break;
                 }
             }
-            result.Add(new ImportModel(name, impl, members, location));
+            result.Add(new ImportModel(name, alias, rootScope, impl, members, location));
         }
         return result.ToImmutable();
+    }
+
+    /// <summary>Yields every (service name, alias) declared by the attributes of this target,
+    /// with the attribute location (used for diagnostics).</summary>
+    private static IEnumerable<(string Name, string? Alias, Location Location)> GetImports(
+        GeneratorAttributeSyntaxContext ctx)
+    {
+        foreach (var attribute in ctx.Attributes)
+        {
+            if (attribute.ConstructorArguments.Length == 0 || attribute.ConstructorArguments[0].Value is not string s || s.Length == 0) continue;
+            string? alias = null;
+            foreach (var named in attribute.NamedArguments)
+            {
+                if (named.Key == "Alias" && named.Value.Value is string a && a.Length > 0) alias = a;
+            }
+            var location = attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? Location.None;
+            yield return (s, alias, location);
+        }
     }
 
     private static INamedTypeSymbol? FindImpl(Compilation compilation, string name)
@@ -117,7 +153,7 @@ public sealed class CordiSharpImportGenerator : IIncrementalGenerator
         {
             return false;
         }
-        if (type is INamedTypeSymbol named && named.TypeArguments.Length > 0)
+        if (type is INamedTypeSymbol { TypeArguments.Length: > 0 } named)
         {
             return named.TypeArguments.All(t => IsUsableType(t, impl));
         }
@@ -161,27 +197,13 @@ public sealed class CordiSharpImportGenerator : IIncrementalGenerator
 
     private static string Q(string value) => "\"" + value + "\"";
 
-    /// <summary>Yields every import name declared on the target (a class may carry several
-    /// <c>[Import]</c> attributes).</summary>
-    private static IEnumerable<string> GetImportNames(GeneratorAttributeSyntaxContext ctx)
-    {
-        foreach (var attribute in ctx.Attributes)
-        {
-            var display = attribute.AttributeClass?.ToDisplayString() ?? "";
-            if (display is not ("CordiSharp.ImportAttribute" or "CordiSharp.Registry.ImportAttribute" or "ImportAttribute")) continue;
-            if (attribute.ConstructorArguments.Length > 0 && attribute.ConstructorArguments[0].Value is string s && s.Length > 0)
-            {
-                yield return s;
-            }
-        }
-    }
-
     private static void Emit(SourceProductionContext spc, ImportModel model)
     {
         var impl = model.Impl!;
         var iface = "I" + impl.Name;
         var bridge = impl.Name + "Bridge";
-        var ns = "CordiSharp.Importing.Generated";
+        var accessor = model.Alias ?? model.Name;
+        const string ns = "CordiSharp.Importing.Generated";
 
         var sb = new StringBuilder();
         sb.AppendLine("// <auto-generated/>");
@@ -223,7 +245,7 @@ public sealed class CordiSharpImportGenerator : IIncrementalGenerator
         sb.AppendLine();
         sb.AppendLine("        private object RequireTarget()");
         sb.AppendLine("            => _target.TryGetTarget(out var target)");
-        sb.AppendLine("                && ReferenceEquals(target, _ctx.Root.Get(_serviceName, strict: false)) ? target");
+        sb.AppendLine("                && ReferenceEquals(target, " + (model.RootScope ? "_ctx.Root.Get(_serviceName, strict: false)" : "_ctx.Get(_serviceName, strict: false)") + ") ? target");
         sb.AppendLine("""
                 : throw new PluginUnloadedException($"imported service [{_serviceName}] belongs to an unloaded assembly");
 """);
@@ -243,23 +265,24 @@ public sealed class CordiSharpImportGenerator : IIncrementalGenerator
             {
                 var parameters = string.Join(", ", m.ParamTypes.Zip(m.ParamNames, (t, n) => t + " " + n));
                 var argList = string.Join(", ", m.ParamNames);
-                var typeList = string.Join(", ", m.ParamTypes.Select(t => "typeof(" + t + ")"));
+                var typeList = m.ParamTypes.Count == 0
+                    ? "System.Type.EmptyTypes"
+                    : "new[] { " + string.Join(", ", m.ParamTypes.Select(t => "typeof(" + t + ")")) + " }";
                 sb.AppendLine("        public " + m.ReturnType + " " + m.Name + "(" + parameters + ")");
                 sb.AppendLine("        {");
                 if (m.ReturnType == "void")
                 {
-                    sb.AppendLine("            Invoke(" + Q(m.Name) + ", new[] { " + typeList + " }, new object?[] { " + argList + " });");
+                    sb.AppendLine("            Invoke(" + Q(m.Name) + ", " + typeList + ", new object?[] { " + argList + " });");
                 }
                 else
                 {
-                    sb.AppendLine("            return (" + m.ReturnType + ")Invoke(" + Q(m.Name) + ", new[] { " + typeList + " }, new object?[] { " + argList + " })!;");
+                    sb.AppendLine("            return (" + m.ReturnType + ")Invoke(" + Q(m.Name) + ", " + typeList + ", new object?[] { " + argList + " })!;");
                 }
                 sb.AppendLine("        }");
-                sb.AppendLine();
             }
             else
             {
-                if (m.Getter && m.Setter)
+                if (m is { Getter: true, Setter: true })
                 {
                     sb.AppendLine("        public " + m.ReturnType + " " + m.Name);
                     sb.AppendLine("        {");
@@ -275,8 +298,8 @@ public sealed class CordiSharpImportGenerator : IIncrementalGenerator
                 {
                     sb.AppendLine("        public " + m.ReturnType + " " + m.Name + " { set => RequireTarget().GetType().GetProperty(" + Q(m.Name) + ")!.SetValue(RequireTarget(), value); }");
                 }
-                sb.AppendLine();
             }
+            sb.AppendLine();
         }
         sb.AppendLine("    }");
         sb.AppendLine();
@@ -284,16 +307,22 @@ public sealed class CordiSharpImportGenerator : IIncrementalGenerator
         sb.AppendLine("    {");
         sb.AppendLine("        extension(Context ctx)");
         sb.AppendLine("        {");
-        sb.AppendLine("            public " + iface + " " + model.Name + " => ImportResolver.Resolve<" + iface + ", " + bridge + ">(ctx, " + Q(model.Name) + ");");
+        sb.AppendLine("            public " + iface + " " + accessor + " => "
+            + (model.RootScope ? "ImportResolver.Resolve<" : "ImportResolver.ResolveLocal<")
+            + iface + ", " + bridge + ">(ctx, " + Q(model.Name) + ");");
         sb.AppendLine("        }");
         sb.AppendLine("    }");
         sb.AppendLine("}");
-        spc.AddSource("CordiSharp.Importing.Generated." + iface, SourceText.From(sb.ToString(), Encoding.UTF8));
+        spc.AddSource("CordiSharp.Importing.Generated." + iface + (model.RootScope ? ".Root" : ".Local"),
+            SourceText.From(sb.ToString(), Encoding.UTF8));
     }
 
-    private sealed class ImportModel(string name, INamedTypeSymbol? impl, List<MemberModel> members, Location location)
+    private sealed class ImportModel(string name, string? alias, bool rootScope, INamedTypeSymbol? impl,
+        List<MemberModel> members, Location location)
     {
         public string Name { get; } = name;
+        public string? Alias { get; } = alias;
+        public bool RootScope { get; } = rootScope;
         public INamedTypeSymbol? Impl { get; } = impl;
         public List<MemberModel> Members { get; } = members;
         public Location Location { get; } = location;
