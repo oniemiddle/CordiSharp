@@ -9,8 +9,8 @@ public static class ImportResolver
     public static T Resolve<T, TBridge>(Context ctx, string serviceName) where TBridge : class
     {
         var raw = ctx.Root.Get(serviceName, strict: false)
-            ?? throw new ServiceResolutionException(
-                $"""imported service "{serviceName}" is not provided by any loaded assembly""");
+            ?? throw new PluginUnloadedException(
+                $"""imported service "{serviceName}" is not available (no loaded plugin provides it, or it was unloaded)""");
         try
         {
             return (T)(object)Activator.CreateInstance(typeof(TBridge), raw, serviceName, ctx)!;
@@ -27,8 +27,8 @@ public static class ImportResolver
     public static T ResolveLocal<T, TBridge>(Context ctx, string serviceName) where TBridge : class
     {
         var raw = ctx.Get(serviceName, strict: false)
-            ?? throw new ServiceResolutionException(
-                $"""injected service "{serviceName}" is not available in this context""");
+            ?? throw new PluginUnloadedException(
+                $"""injected service "{serviceName}" is not available in this context (plugin unloaded or never provided)""");
         try
         {
             return (T)(object)Activator.CreateInstance(typeof(TBridge), raw, serviceName, ctx)!;
