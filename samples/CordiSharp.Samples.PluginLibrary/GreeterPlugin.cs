@@ -1,11 +1,13 @@
 using CordiSharp.Registry;
+using CordiSharp.Samples.Contracts;
 using CordiSharp.Schema;
 
 namespace CordiSharp.Samples.PluginLibrary;
 
-/// <summary>A service defined in the plugin library.</summary>
+/// <summary>A service defined in the plugin library. Implements the shared contract
+/// <see cref="IGreeter"/> so the service catalog generator can map it.</summary>
 [Service("greeter")]
-public sealed class GreeterService(Context ctx) : Service(ctx)
+public sealed class GreeterService(Context ctx) : Service(ctx), IGreeter
 {
     public string Greet(string name) => $"Hello, {name}!";
 }

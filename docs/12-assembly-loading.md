@@ -117,6 +117,36 @@ greeter.Greet("cordis");   // ❌ 抛 PluginUnloadedException（桥已被撤销�
 > 程序集内部类型。若你的契约接口被插件**直接实现**（共享契约程序集模式），
 > 桥仍然可用（转发到实现方法）；此时注意释放强引用即可。
 
+## 服务目录（源生成器，接口→内部类型映射）
+
+随包附带的**服务目录源生成器**（\u0060CordiSharpServiceCatalogGenerator\u0060）为插件
+程序集中的 \u0060[Service]\u0060 子类生成
+\u0060CordiSharp.Generated.PluginServiceCatalog\u0060：把**跨程序集的契约接口**映射到
+插件内部的实现类型与服务名。这样宿主无需知道服务名，直接按契约解析：
+
+```csharp
+// 共享契约程序集（插件与宿主都引用）：public interface IGreeter { string Greet(string name); }
+// 插件内部：[Service("greeter")] public sealed class GreeterService(Context ctx) : Service(ctx), IGreeter
+
+var set = loader.LoadAssembly(@"plugins/MyPlugin.dll");
+await set.LoadPlugin("GreeterService");
+
+IGreeter greeter = set.GetService<IGreeter>();   // 目录自动解析服务名 "greeter"，返回桥
+greeter.Greet("cordis");
+```
+
+生成规则：
+
+- 只映射**契约接口声明在插件程序集之外**的（共享/宿主契约）；插件本地接口与
+  CordiSharp 框架接口（\u0060IPlugin\u0060、\u0060IContextFilter\u0060 等）被跳过。
+- 目录条目为 \u0060ServiceCatalogEntry(Contract, ServiceName, Impl)\u0060，可通过
+  \u0060set.ServiceCatalog\u0060 查看；\u0060Impl\u0060 是插件内部类型（卸载后即失效，
+  不要长期持有）。
+- 目录数据由 loader 在加载时**反射读取、作用域限定在 \u0060AssemblyPluginSet\u0060**，
+  不进入任何静态注册表，卸载时随 set 一起释放。
+- \u0060GetService<T>()\u0060（免名）依赖目录；\u0060GetService<T>(name)\u0060（具名）
+  不依赖目录，适用于插件未用生成器、或契约完全由宿主临时定义（按方法名适配）的场景。
+
 ## 卸载规则（重要）
 
 **卸载时不能有目标程序集的任何强引用**。以下引用必须在使用结束后释放：

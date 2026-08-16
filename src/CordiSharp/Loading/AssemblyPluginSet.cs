@@ -16,9 +16,11 @@ public sealed class AssemblyPluginSet : IAsyncDisposable
     internal readonly List<PluginRuntime> Runtimes = [];
     internal readonly List<AssemblyPluginHandle> Handles = [];
     internal readonly List<WeakReference<ServiceBridgeBase>> Bridges = [];
+    private IReadOnlyList<ServiceCatalogEntry> _catalog = [];
 
     internal AssemblyPluginSet(AssemblyLoaderService loader, string name, string path,
-        PluginAssemblyLoadContext alc, Assembly assembly, List<AssemblyPluginInfo> plugins)
+        PluginAssemblyLoadContext alc, Assembly assembly, List<AssemblyPluginInfo> plugins,
+        IReadOnlyList<ServiceCatalogEntry> catalog)
     {
         _loader = loader;
         Name = name;
@@ -26,6 +28,7 @@ public sealed class AssemblyPluginSet : IAsyncDisposable
         ALC = alc;
         Assembly = assembly;
         Plugins = plugins;
+        _catalog = catalog;
     }
 
     /// <summary>Display name of the load context.</summary>
@@ -43,6 +46,12 @@ public sealed class AssemblyPluginSet : IAsyncDisposable
 
     /// <summary>Plugins discovered in the assembly (empty after unload).</summary>
     public IReadOnlyList<AssemblyPluginInfo> Plugins { get; private set; }
+
+    /// <summary>Generated service catalog: contract interface (declared outside the plugin
+    /// assembly) → internal service type + service name. Empty if the plugin assembly was
+    /// not built with the CordiSharp service-catalog generator. Cleared after unload;
+    /// entries hold plugin-ALC types, so do not retain them.</summary>
+    public IReadOnlyList<ServiceCatalogEntry> ServiceCatalog => _catalog;
 
     /// <summary>Finds a discovered plugin by name.</summary>
     public AssemblyPluginInfo GetPlugin(string name)
@@ -89,6 +98,26 @@ public sealed class AssemblyPluginSet : IAsyncDisposable
         return bridge;
     }
 
+    /// <summary>Resolves a plugin service through the generated service catalog: finds the
+    /// service that provides contract <typeparamref name="T"/> (declared outside the plugin
+    /// assembly and referenced by it) and returns its bridge. Requires the plugin assembly
+    /// to have been built with the CordiSharp service-catalog source generator.</summary>
+    public T GetService<T>() where T : class
+    {
+        if (!typeof(T).IsInterface)
+        {
+            throw new CordisException($"{nameof(GetService)}<T> requires T to be an interface contract");
+        }
+        foreach (var entry in _catalog)
+        {
+            if (ReferenceEquals(entry.Contract, typeof(T)))
+            {
+                return GetService<T>(entry.ServiceName);
+            }
+        }
+        throw new CordisException($"no plugin service in assembly {Name} provides contract {typeof(T).Name}");
+    }
+
     /// <summary>Unloads this assembly: disposes plugin fibers, drops references, unloads the ALC.
     /// When <paramref name="verify"/> is true (default) a bounded forced-GC loop checks that
     /// the load context was actually collected.</summary>
@@ -110,6 +139,7 @@ public sealed class AssemblyPluginSet : IAsyncDisposable
             if (weak.TryGetTarget(out var bridge)) bridge.Revoke();
         }
         Bridges.Clear();
+        _catalog = [];
         Runtimes.Clear();
         ALC = null;
         Assembly = null;

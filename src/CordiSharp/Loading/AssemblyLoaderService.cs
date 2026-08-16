@@ -38,7 +38,8 @@ public sealed class AssemblyLoaderService(Context ctx) : Service(ctx)
         }
 
         var plugins = Discover(assembly);
-        var set = new AssemblyPluginSet(this, name, fullPath, alc, assembly, plugins);
+        var catalog = LoadCatalog(assembly);
+        var set = new AssemblyPluginSet(this, name, fullPath, alc, assembly, plugins, catalog);
         _sets.Add(set);
         return set;
     }
@@ -99,6 +100,20 @@ public sealed class AssemblyLoaderService(Context ctx) : Service(ctx)
             await UnloadAsync(set, verify: false);
         }
     });
+
+    /// <summary>Reads the generated service catalog (<c>CordiSharp.Generated.PluginServiceCatalog</c>)
+    /// from the plugin assembly, if present. Entries are scoped to the returned list — never
+    /// registered in a static registry — so they are dropped together with the set on unload.</summary>
+    private static List<ServiceCatalogEntry> LoadCatalog(Assembly assembly)
+    {
+        var result = new List<ServiceCatalogEntry>();
+        var catalogType = assembly.GetType("CordiSharp.Generated.PluginServiceCatalog");
+        if (catalogType is null) return result;
+        var method = catalogType.GetMethod("GetEntries", BindingFlags.Public | BindingFlags.Static);
+        if (method is null || method.Invoke(null, null) is not IEnumerable<ServiceCatalogEntry> entries) return result;
+        result.AddRange(entries);
+        return result;
+    }
 
     private static List<AssemblyPluginInfo> Discover(Assembly assembly)
     {

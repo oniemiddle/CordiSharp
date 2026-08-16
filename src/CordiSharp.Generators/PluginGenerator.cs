@@ -11,8 +11,8 @@ namespace CordiSharp.Generators;
 [Generator(LanguageNames.CSharp)]
 public sealed class CordiSharpPluginGenerator : IIncrementalGenerator
 {
-    private const string PluginAttribute = "CordiSharp.PluginAttribute";
-    private const string InjectAttribute = "CordiSharp.InjectAttribute";
+    private const string PluginAttribute = "CordiSharp.Registry.PluginAttribute";
+    private const string InjectAttribute = "CordiSharp.Registry.InjectAttribute";
     private const string DefaultValueAttribute = "CordiSharp.Schema.DefaultValueAttribute";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -95,8 +95,8 @@ public sealed class CordiSharpPluginGenerator : IIncrementalGenerator
         foreach (var iface in type.AllInterfaces)
         {
             if (!iface.IsGenericType) continue;
-            var def = iface.OriginalDefinition.ToDisplayString();
-            if (def is "CordiSharp.IPlugin<TConfig>" or "CordiSharp.IAsyncPlugin<TConfig>")
+            var def = iface.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            if (def is "global::CordiSharp.Registry.IPlugin<TConfig>" or "global::CordiSharp.Registry.IAsyncPlugin<TConfig>")
             {
                 return (INamedTypeSymbol)iface.TypeArguments[0];
             }
@@ -149,9 +149,9 @@ public sealed class CordiSharpPluginGenerator : IIncrementalGenerator
         public void Write(StringBuilder builder)
         {
             var typeRef = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            builder.AppendLine("            global::CordiSharp.PluginMetadataRegistry.Register(");
+            builder.AppendLine("            global::CordiSharp.Registry.PluginMetadataRegistry.Register(");
             builder.AppendLine("                typeof(" + typeRef + "),");
-            builder.AppendLine("                new global::CordiSharp.PluginMetadata(");
+            builder.AppendLine("                new global::CordiSharp.Registry.PluginMetadata(");
             builder.AppendLine("                    " + Q(name) + ",");
             if (configType is not null)
             {

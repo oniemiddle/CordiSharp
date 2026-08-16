@@ -1,6 +1,7 @@
 using System.Runtime.Loader;
 using CordiSharp.Loading;
 using CordiSharp.Registry;
+using CordiSharp.Samples.Contracts;
 using CordiSharp.Samples.PluginLibrary;
 using Xunit;
 
@@ -208,6 +209,27 @@ public class AssemblyLoadingTests
 
         Assert.Throws<CordisException>(() => set.GetService<object>("greeter"));
         Assert.Throws<ServiceResolutionException>(() => set.GetService<IGreeterContract>("missing"));
+    }
+
+    [Fact]
+    public async Task GetService_ResolvesByGeneratedCatalog()
+    {
+        var (_, loader) = await StartLoader();
+        await using var set = loader.LoadAssembly(PluginLibraryPath);
+        await set.LoadPlugin("GreeterService");
+
+        // the generated catalog maps the shared contract (IGreeter, outside the plugin
+        // assembly) to the plugin's internal GreeterService; GetService<T>() resolves the
+        // service name from the catalog and returns a bridge
+        Assert.Contains(set.ServiceCatalog,
+            e => e.Contract == typeof(IGreeter) && e.ServiceName == "greeter");
+
+        IGreeter greeter = set.GetService<IGreeter>();
+        Assert.Equal("Hello, cordis!", greeter.Greet("cordis"));
+
+        await set.UnloadAsync(verify: false);
+        Assert.Empty(set.ServiceCatalog);
+        Assert.Throws<PluginUnloadedException>(() => greeter.Greet("cordis"));
     }
 
     /// <summary>Host-side contract used by <see cref="GetService_ReturnsBridge_ThatWorksThenThrowsAfterUnload"/>.

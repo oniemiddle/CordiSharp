@@ -21,6 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\CordiSharp.Extensions.Logging\CordiSharp.Extensions.Logging.csproj" />
     <ProjectReference Include="..\CordiSharp\CordiSharp.csproj" />
     <ProjectReference Include="..\CordiSharp.Extensions.DependencyInjection\CordiSharp.Extensions.DependencyInjection.csproj" />
   </ItemGroup>
