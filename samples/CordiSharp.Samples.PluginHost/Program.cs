@@ -4,6 +4,7 @@ using CordiSharp.Importing.Generated;
 using CordiSharp.Loading;
 using CordiSharp.Registry;
 using CordiSharp.Samples.PluginLibrary;
+using CordiSharp.Schema;
 
 // =========================================================================
 // Cross-assembly plugin loading

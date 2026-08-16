@@ -21,9 +21,10 @@ public sealed class CordiSharpImportGenerator : IIncrementalGenerator
         var imports = context.SyntaxProvider.ForAttributeWithMetadataName(
             ImportAttribute,
             static (node, _) => node is ClassDeclarationSyntax,
-            static (ctx, ct) => CreateModel(ctx, ct));
+            static (ctx, ct) => CreateModels(ctx, ct));
 
-        var compiled = imports.Collect();
+        // one model per [Import] attribute (a type may declare several imports)
+        var compiled = imports.SelectMany(static (models, _) => models).Collect();
         context.RegisterSourceOutput(compiled, static (spc, models) =>
         {
             foreach (var group in models.GroupBy(m => m.Name, StringComparer.Ordinal))
@@ -34,7 +35,8 @@ public sealed class CordiSharpImportGenerator : IIncrementalGenerator
                     spc.ReportDiagnostic(Diagnostic.Create(
                         new DiagnosticDescriptor("CORDIS004", "Import target not found",
                             "no [Service] type named \"{0}\" was found in referenced plugin assemblies",
-                            "CordiSharp", DiagnosticSeverity.Error, true), model.Location));
+                            "CordiSharp", DiagnosticSeverity.Error, true),
+                        model.Location, model.Name));
                     continue;
                 }
                 Emit(spc, model);
@@ -42,45 +44,53 @@ public sealed class CordiSharpImportGenerator : IIncrementalGenerator
         });
     }
 
-    private static ImportModel? CreateModel(GeneratorAttributeSyntaxContext ctx, CancellationToken ct)
+    private static System.Collections.Immutable.ImmutableArray<ImportModel> CreateModels(
+        GeneratorAttributeSyntaxContext ctx, CancellationToken ct)
     {
-        var name = GetImportName(ctx);
-        if (string.IsNullOrEmpty(name)) return null;
         var compilation = ctx.SemanticModel.Compilation;
         var location = ctx.TargetSymbol.Locations.FirstOrDefault() ?? Location.None;
+        var result = System.Collections.Immutable.ImmutableArray.CreateBuilder<ImportModel>();
+        foreach (var name in GetImportNames(ctx))
+        {
+            var impl = FindImpl(compilation, name);
+            if (impl is null)
+            {
+                result.Add(new ImportModel(name, null, [], location));
+                continue;
+            }
+            var members = new List<MemberModel>();
+            foreach (var member in impl.GetMembers())
+            {
+                switch (member)
+                {
+                    case IMethodSymbol method when IsUsableMethod(method, impl):
+                        members.Add(new MemberModel(method.Name, FormatType(method.ReturnType), "method",
+                            method.Parameters.Select(p => FormatType(p.Type)).ToList(),
+                            method.Parameters.Select(p => p.Name).ToList(), false, false));
+                        break;
+                    case IPropertySymbol property when IsUsableProperty(property, impl):
+                        members.Add(new MemberModel(property.Name, FormatType(property.Type), "property", [], [],
+                            property.GetMethod is not null, property.SetMethod is not null));
+                        break;
+                }
+            }
+            result.Add(new ImportModel(name, impl, members, location));
+        }
+        return result.ToImmutable();
+    }
 
-        INamedTypeSymbol? impl = null;
+    private static INamedTypeSymbol? FindImpl(Compilation compilation, string name)
+    {
         foreach (var reference in compilation.References)
         {
             if (compilation.GetAssemblyOrModuleSymbol(reference) is not IAssemblySymbol asm) continue;
             if (SkipAssembly(asm)) continue;
             foreach (var type in EnumerateTypes(asm.GlobalNamespace))
             {
-                if (!HasServiceName(type, name)) continue;
-                impl = type;
-                break;
-            }
-            if (impl is not null) break;
-        }
-        if (impl is null) return new ImportModel(name, null, [], location);
-
-        var members = new List<MemberModel>();
-        foreach (var member in impl.GetMembers())
-        {
-            switch (member)
-            {
-                case IMethodSymbol method when IsUsableMethod(method, impl):
-                    members.Add(new MemberModel(method.Name, FormatType(method.ReturnType), "method",
-                        method.Parameters.Select(p => FormatType(p.Type)).ToList(),
-                        method.Parameters.Select(p => p.Name).ToList(), false, false));
-                    break;
-                case IPropertySymbol property when IsUsableProperty(property, impl):
-                    members.Add(new MemberModel(property.Name, FormatType(property.Type), "property", [], [],
-                        property.GetMethod is not null, property.SetMethod is not null));
-                    break;
+                if (HasServiceName(type, name)) return type;
             }
         }
-        return new ImportModel(name, impl, members, location);
+        return null;
     }
 
     private static bool IsUsableMethod(IMethodSymbol method, INamedTypeSymbol impl)
@@ -151,15 +161,19 @@ public sealed class CordiSharpImportGenerator : IIncrementalGenerator
 
     private static string Q(string value) => "\"" + value + "\"";
 
-    private static string? GetImportName(GeneratorAttributeSyntaxContext ctx)
+    /// <summary>Yields every import name declared on the target (a class may carry several
+    /// <c>[Import]</c> attributes).</summary>
+    private static IEnumerable<string> GetImportNames(GeneratorAttributeSyntaxContext ctx)
     {
         foreach (var attribute in ctx.Attributes)
         {
             var display = attribute.AttributeClass?.ToDisplayString() ?? "";
             if (display is not ("CordiSharp.ImportAttribute" or "CordiSharp.Registry.ImportAttribute" or "ImportAttribute")) continue;
-            if (attribute.ConstructorArguments.Length > 0 && attribute.ConstructorArguments[0].Value is string s && s.Length > 0) return s;
+            if (attribute.ConstructorArguments.Length > 0 && attribute.ConstructorArguments[0].Value is string s && s.Length > 0)
+            {
+                yield return s;
+            }
         }
-        return null;
     }
 
     private static void Emit(SourceProductionContext spc, ImportModel model)

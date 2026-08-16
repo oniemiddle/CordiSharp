@@ -35,6 +35,7 @@ public class AnalyzerTests
     {
         var diagnostics = Analyze("""
             using CordiSharp;
+            using CordiSharp.Registry;
             [Inject("")]
             public class BadPlugin : CordiSharp.Service
             {
@@ -49,6 +50,7 @@ public class AnalyzerTests
     {
         var diagnostics = Analyze("""
             using CordiSharp;
+            using CordiSharp.Registry;
             [Plugin("x")]
             public class NoCtorPlugin : IPlugin<object>
             {
@@ -64,6 +66,7 @@ public class AnalyzerTests
     {
         var diagnostics = Analyze("""
             using CordiSharp;
+            using CordiSharp.Registry;
             using CordiSharp.Schema;
             [Plugin("x")]
             public class FuncConfigPlugin : IPlugin<FuncConfig>
@@ -84,6 +87,7 @@ public class AnalyzerTests
     {
         var diagnostics = Analyze("""
             using CordiSharp;
+            using CordiSharp.Registry;
             [Plugin("x")]
             public class GoodPlugin : IPlugin<object>
             {

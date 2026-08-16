@@ -46,10 +46,10 @@ public sealed class CordiSharpAnalyzer : DiagnosticAnalyzer
 
         context.RegisterCompilationStartAction(start =>
         {
-            var pluginAttr = start.Compilation.GetTypeByMetadataName("CordiSharp.PluginAttribute");
-            var injectAttr = start.Compilation.GetTypeByMetadataName("CordiSharp.InjectAttribute");
+            var pluginAttr = start.Compilation.GetTypeByMetadataName("CordiSharp.Registry.PluginAttribute");
+            var injectAttr = start.Compilation.GetTypeByMetadataName("CordiSharp.Registry.InjectAttribute");
             var configAttr = start.Compilation.GetTypeByMetadataName("CordiSharp.Schema.PluginConfigAttribute");
-            var iPlugin = start.Compilation.GetTypeByMetadataName("CordiSharp.IPlugin`1");
+            var iPlugin = start.Compilation.GetTypeByMetadataName("CordiSharp.Registry.IPlugin`1");
 
             start.RegisterSymbolAction(symbolContext => AnalyzeNamedType(symbolContext, pluginAttr, injectAttr, configAttr, iPlugin),
                 SymbolKind.NamedType);

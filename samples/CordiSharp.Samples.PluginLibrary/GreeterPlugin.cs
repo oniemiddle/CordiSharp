@@ -10,6 +10,14 @@ public sealed class GreeterService(Context ctx) : Service(ctx)
     public string Greet(string name) => $"Hello, {name}!";
 }
 
+/// <summary>Another service defined in the plugin library (used to demonstrate multiple
+/// <c>[Import]</c> annotations on one host type).</summary>
+[Service("echo")]
+public sealed class EchoService(Context ctx) : Service(ctx)
+{
+    public string Echo(string text) => text;
+}
+
 /// <summary>A plugin in the library that injects the library's greeter service.</summary>
 [Inject("greeter")]
 public sealed class DependentPlugin : IPlugin<DependentConfig>
