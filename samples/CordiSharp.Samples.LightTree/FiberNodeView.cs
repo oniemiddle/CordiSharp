@@ -10,8 +10,9 @@ namespace CordiSharp.Samples.LightTree;
 /// <summary>
 /// A node "light" in the tree: a circle whose fill follows the fiber state with a
 /// 0.3 s <see cref="BrushTransition"/>, plus the plugin name, the state label and a
-/// warning badge. Supports drag-to-move and raises <see cref="Clicked"/> (used by the
-/// link mode edge creation). Right-click context menu is attached by <see cref="GraphCanvas"/>.
+/// warning badge. Plain left button drags the node; Ctrl+left click raises
+/// <see cref="CtrlClicked"/> (connect / cancel-connect). Right-click context menu
+/// is attached by <see cref="GraphCanvas"/>.
 /// </summary>
 public sealed class FiberNodeView : Border
 {
@@ -31,17 +32,15 @@ public sealed class FiberNodeView : Border
     private double _startX;
     private double _startY;
     private bool _dragging;
-    private bool _moved;
-    private Point _linkPressWorld;
+    private bool _ctrlPress;
+    private Point _ctrlPressWorld;
 
     /// <summary>The world canvas this view lives in (for coordinate conversion).</summary>
     public Canvas? WorldCanvas { get; set; }
 
-    /// <summary>When true, presses only raise <see cref="Clicked"/> (no dragging).</summary>
-    public Func<bool>? IsLinkMode { get; set; }
-
-    /// <summary>Raised on a plain left click (press+release without movement).</summary>
-    public event Action<NodeViewModel>? Clicked;
+    /// <summary>Raised on Ctrl+left click (connect / cancel-connect selection).
+    /// Plain left button only drags the node — it never changes selection state.</summary>
+    public event Action<NodeViewModel>? CtrlClicked;
 
     public FiberNodeView(NodeViewModel node)
     {
@@ -156,7 +155,8 @@ public sealed class FiberNodeView : Border
             "说明: 拖拽移动 · 右键切换状态 · 滚轮缩放画布");
     }
 
-    // ---- pointer interaction: drag to move, click to select (link mode) ----
+    // ---- pointer interaction ----
+    // Plain left button: drag to move only. Ctrl+left click: connect / cancel-connect.
 
     private Visual GetOrigin() => (Visual?)WorldCanvas ?? this;
 
@@ -164,15 +164,17 @@ public sealed class FiberNodeView : Border
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
 
-        if (IsLinkMode?.Invoke() == true)
+        if ((e.KeyModifiers & KeyModifiers.Control) != 0)
         {
-            _linkPressWorld = e.GetPosition(GetOrigin());
+            // Ctrl+click: selection/connection — record it, do not drag
+            _ctrlPress = true;
+            _ctrlPressWorld = e.GetPosition(GetOrigin());
             e.Handled = true;
             return;
         }
+        _ctrlPress = false;
 
         _dragging = true;
-        _moved = false;
         _pressWorld = e.GetPosition(GetOrigin());
         _startX = _node.X;
         _startY = _node.Y;
@@ -186,7 +188,6 @@ public sealed class FiberNodeView : Border
         var current = e.GetPosition(GetOrigin());
         var dx = current.X - _pressWorld.X;
         var dy = current.Y - _pressWorld.Y;
-        if (Math.Abs(dx) > 2 || Math.Abs(dy) > 2) _moved = true;
         _node.X = Math.Max(0, _startX + dx);
         _node.Y = Math.Max(0, _startY + dy);
         e.Handled = true;
@@ -194,22 +195,21 @@ public sealed class FiberNodeView : Border
 
     private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (_dragging)
+        if (_ctrlPress)
         {
-            _dragging = false;
-            e.Pointer.Capture(null);
+            _ctrlPress = false;
+            var released = e.GetPosition(GetOrigin());
+            var dx = released.X - _ctrlPressWorld.X;
+            var dy = released.Y - _ctrlPressWorld.Y;
+            if (Math.Sqrt(dx * dx + dy * dy) < 4) CtrlClicked?.Invoke(_node);
             e.Handled = true;
-            if (!_moved) Clicked?.Invoke(_node);
             return;
         }
 
-        if (IsLinkMode?.Invoke() == true)
-        {
-            var released = e.GetPosition(GetOrigin());
-            var dx = released.X - _linkPressWorld.X;
-            var dy = released.Y - _linkPressWorld.Y;
-            if (Math.Sqrt(dx * dx + dy * dy) < 4) Clicked?.Invoke(_node);
-            e.Handled = true;
-        }
+        if (!_dragging) return;
+        _dragging = false;
+        e.Pointer.Capture(null);
+        e.Handled = true;
+        // plain left click that did not move does NOT change selection state
     }
 }

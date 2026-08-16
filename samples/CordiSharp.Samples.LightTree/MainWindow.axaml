@@ -14,10 +14,11 @@
         <Button x:Name="DemoButton" Content="示例图" />
         <Button x:Name="StartAllButton" Content="启动全部" />
         <Button x:Name="StopAllButton" Content="停止全部" />
-        <ToggleButton x:Name="LinkModeButton" Content="连线模式" />
         <Button x:Name="ClearButton" Content="清空" />
         <TextBlock VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#546E7A"
-                   Text="图例：绿=Active  黄=Pending  红=Failed  灰=Disposed  浅绿=Loading  浅黄=Unloading" />
+                   Text="Ctrl+左键点节点 = 连线/删线（先依赖方后提供方，已有边则删除）｜左键拖动移动/平移" />
+        <TextBlock VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#546E7A"
+                   Text="图例：绿=Active  黄=Pending  红=Failed  灰=Disposed" />
       </StackPanel>
     </Border>
 

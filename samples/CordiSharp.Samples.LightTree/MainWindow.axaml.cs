@@ -28,16 +28,6 @@ public partial class MainWindow : Window
         StopAllButton.Click += async (_, _) => await _vm.StopAllAsync();
         ClearButton.Click += async (_, _) => await _vm.ClearAsync();
 
-        LinkModeButton.IsCheckedChanged += (_, _) =>
-        {
-            var isChecked = LinkModeButton.IsChecked == true;
-            _vm.LinkMode = isChecked;
-            if (isChecked)
-            {
-                ShowInfo("连线模式：依次点击【依赖方】→【提供方】创建有向边（A→B 表示 A 依赖 B）。点击空白处取消。", Brushes.Black);
-            }
-        };
-
         _vm.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(GraphViewModel.Message) or nameof(GraphViewModel.MessageBrush))
@@ -54,9 +44,44 @@ public partial class MainWindow : Window
             {
                 await AutoDemoAsync();
             }
+            else if (Environment.GetCommandLineArgs().Contains("--zoomtest"))
+            {
+                await ZoomTestAsync();
+            }
         };
 
         Closing += (_, _) => _vm.Dispose();
+    }
+
+    /// <summary>Programmatic zoom/pan sequence with per-frame alignment verification
+    /// (node actual render position vs matrix-expected), to detect node/edge drift.
+    /// Log: %TEMP%/lighttree-zoomtest.log</summary>
+    private async Task ZoomTestAsync()
+    {
+        var log = new StreamWriter(Path.Combine(Path.GetTempPath(), "lighttree-zoomtest.log"), append: false);
+        void Dump(string step)
+        {
+            log.WriteLine("=== " + step + " ===");
+            log.Write(Canvas.VerifyAlignment());
+            log.Flush();
+        }
+
+        var center = () => new Point(Canvas.Bounds.Width / 2, Canvas.Bounds.Height / 2);
+        await Task.Delay(400);
+        Dump("initial");
+        Canvas.ZoomBy(2.2, center());
+        await Task.Delay(400);
+        Dump("zoomin 2.2");
+        Canvas.ZoomBy(1.0 / 2.2, center());
+        await Task.Delay(400);
+        Dump("back");
+        Canvas.PanBy(new Vector(180, 60));
+        await Task.Delay(400);
+        Dump("pan");
+        Canvas.ZoomBy(1.6, new Point(200, 150));
+        await Task.Delay(400);
+        Dump("zoom-corner");
+        log.Close();
     }
 
     /// <summary>Replays the user-visible cascade scenario and dumps node states to a

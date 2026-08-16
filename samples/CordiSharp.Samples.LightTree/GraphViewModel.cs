@@ -21,16 +21,7 @@ public sealed class GraphViewModel : ObservableObject, IDisposable
     /// <summary>Raised when the visual graph needs repainting (node/edge topology changes).</summary>
     public event Action? GraphChanged;
 
-    // ---- link mode (edge creation) ----
-
-    public bool LinkMode
-    {
-        get;
-        set
-        {
-            if (Set(ref field, value) && !value) LinkSource = null;
-        }
-    }
+    // ---- connection selection (Ctrl+left click) ----
 
     public NodeViewModel? LinkSource
     {
@@ -44,6 +35,9 @@ public sealed class GraphViewModel : ObservableObject, IDisposable
             OnPropertyChanged();
         }
     }
+
+    /// <summary>Cancels the pending connection selection (Ctrl+click on empty canvas).</summary>
+    public void CancelLink() => LinkSource = null;
 
     // ---- info bar ----
 
@@ -113,6 +107,24 @@ public sealed class GraphViewModel : ObservableObject, IDisposable
             await StartCoreAsync(edge.From);
         }
         await SettleAsync();
+    }
+
+    /// <summary>Ctrl+click connection semantics: toggles edge existence (bool inversion).
+    /// Creates dep→prov when absent, removes it when already present.</summary>
+    public async Task ToggleEdgeAsync(NodeViewModel dep, NodeViewModel prov)
+    {
+        var existing = Edges.FirstOrDefault(e => e.From == dep && e.To == prov);
+        if (existing is not null)
+        {
+            await RemoveEdgeAsync(existing);
+            ShowHint($"已删除连线 {dep.Name}→{prov.Name}。");
+        }
+        else
+        {
+            await AddEdgeAsync(dep, prov);
+            ShowHint($"已创建连线 {dep.Name}→{prov.Name}（{dep.Name} 依赖 {prov.Name}）。再次 Ctrl+点击可删除。");
+        }
+        LinkSource = null;
     }
 
     // ---- user actions (mapped to real CordiSharp operations) ----

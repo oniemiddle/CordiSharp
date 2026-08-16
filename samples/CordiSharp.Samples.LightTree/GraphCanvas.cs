@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Text;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -13,9 +14,10 @@ namespace CordiSharp.Samples.LightTree;
 /// anchored at the cursor), grid background, directed dependency edges with arrowheads,
 /// and draggable node "lights".
 ///
-/// Layout: this control is a <see cref="Panel"/> whose only child is a world <see cref="Canvas"/>
-/// (<see cref="_world"/>, transformed by the pan/zoom matrix). The world canvas hosts the
-/// <see cref="EdgeLayer"/> (grid + edges, drawn in world coordinates) and the node views.
+/// Layout: this control is a <see cref="Panel"/> with two children —
+/// <see cref="_edgeLayer"/> (grid + edges; fills the viewport and applies the pan/zoom
+/// matrix itself, so it always covers the whole background) and <see cref="_world"/>
+/// (a world <see cref="Canvas"/> holding the node views, transformed by the same matrix).
 /// </summary>
 public sealed class GraphCanvas : Panel
 {
@@ -34,8 +36,6 @@ public sealed class GraphCanvas : Panel
     {
         IsHitTestVisible = false,
         ClipToBounds = false,
-        Width = 20000,
-        Height = 20000,
     };
     private readonly Dictionary<NodeViewModel, FiberNodeView> _views = new();
     private readonly Dictionary<NodeViewModel, PropertyChangedEventHandler> _nodeHandlers = new();
@@ -50,7 +50,12 @@ public sealed class GraphCanvas : Panel
         ClipToBounds = true;
         Background = new SolidColorBrush(Color.Parse("#FAFAFA"));
         _world.RenderTransform = _worldTransform;
-        _world.Children.Add(_edgeLayer);
+        // RenderTransform applies T(origin)·M·T(-origin) around RenderTransformOrigin.
+        // Default origin is NOT (0,0), which would make the world canvas transform
+        // differ from the EdgeLayer's raw matrix → node/edge drift on zoom. Pin (0,0).
+        _world.RenderTransformOrigin = new RelativePoint(0, 0, RelativeUnit.Relative);
+        // edge layer first (stretched to the viewport, drawn under), world canvas on top
+        Children.Add(_edgeLayer);
         Children.Add(_world);
 
         PointerPressed += OnPointerPressed;
@@ -90,7 +95,6 @@ public sealed class GraphCanvas : Panel
         Graph.GraphChanged -= OnGraphChanged;
         foreach (var node in Graph.Nodes.ToList()) RemoveView(node);
         _world.Children.Clear();
-        _world.Children.Add(_edgeLayer);
     }
 
     private void OnGraphChanged() => InvalidateEdges();
@@ -117,9 +121,8 @@ public sealed class GraphCanvas : Panel
         var view = new FiberNodeView(node)
         {
             WorldCanvas = _world,
-            IsLinkMode = () => Graph?.LinkMode == true,
         };
-        view.Clicked += OnNodeClicked;
+        view.CtrlClicked += OnNodeCtrlClicked;
         view.ContextMenu = BuildNodeMenu(node);
         _views[node] = view;
         _world.Children.Add(view);
@@ -166,24 +169,24 @@ public sealed class GraphCanvas : Panel
         Canvas.SetTop(view, node.Y - FiberNodeView.Radius - 8);
     }
 
-    private void OnNodeClicked(NodeViewModel node)
+    private void OnNodeCtrlClicked(NodeViewModel node)
     {
         if (Graph is null) return;
         if (Graph.LinkSource is null)
         {
             Graph.LinkSource = node;
-            ShowHint($"已选中 {node.Name} 作为依赖方，再点击它的提供方。");
+            ShowHint($"已选中 {node.Name} 作为依赖方：Ctrl+点击提供方，无则建边、有则删边（自动取反）。");
         }
         else if (ReferenceEquals(Graph.LinkSource, node))
         {
             Graph.LinkSource = null;
-            ShowHint("已取消连线。");
+            ShowHint("已取消选中。");
         }
         else
         {
             var dep = Graph.LinkSource;
             Graph.LinkSource = null;
-            _ = Graph.AddEdgeAsync(dep, node);
+            _ = Graph.ToggleEdgeAsync(dep, node);
         }
     }
 
@@ -242,9 +245,10 @@ public sealed class GraphCanvas : Panel
         }
 
         if (!point.Properties.IsLeftButtonPressed) return;
-        if (Graph?.LinkMode == true)
+        if ((e.KeyModifiers & KeyModifiers.Control) != 0)
         {
-            Graph.LinkSource = null;
+            // Ctrl+click on empty canvas: cancel the pending connection
+            Graph?.CancelLink();
             e.Handled = true;
             return;
         }
@@ -299,6 +303,45 @@ public sealed class GraphCanvas : Panel
     }
 
     private void InvalidateEdges() => _edgeLayer.Update(Graph, _viewMatrix, Bounds.Size);
+
+    /// <summary>Programmatic zoom anchored at a viewport point (mirrors the wheel handler).</summary>
+    public void ZoomBy(double factor, Point at)
+    {
+        var newZoom = Math.Clamp(_zoom * factor, 0.2, 4.0);
+        if (Math.Abs(newZoom - _zoom) < 1e-9) return;
+        factor = newZoom / _zoom;
+        _zoom = newZoom;
+        _viewMatrix = _viewMatrix
+            * Matrix.CreateTranslation(-at.X, -at.Y)
+            * Matrix.CreateScale(factor, factor)
+            * Matrix.CreateTranslation(at.X, at.Y);
+        ApplyView();
+    }
+
+    /// <summary>Programmatic pan by a viewport delta (mirrors the drag handler).</summary>
+    public void PanBy(Vector delta)
+    {
+        _viewMatrix = _viewMatrix * Matrix.CreateTranslation(delta.X, delta.Y);
+        ApplyView();
+    }
+
+    /// <summary>Compares each node's ACTUAL rendered position (TranslatePoint, includes the
+    /// world RenderTransform) against the matrix-expected position, to detect alignment
+    /// drift between node controls and the manually drawn edge layer.</summary>
+    public string VerifyAlignment()
+    {
+        var sb = new StringBuilder();
+        foreach (var (node, view) in _views)
+        {
+            var actual = view.TranslatePoint(new Point(FiberNodeView.Radius + 8, FiberNodeView.Radius + 8), this);
+            var expected = new Point(node.X, node.Y).Transform(_viewMatrix);
+            var dx = (actual?.X ?? double.NaN) - expected.X;
+            var dy = (actual?.Y ?? double.NaN) - expected.Y;
+            sb.AppendLine($"{node.Name}: actual=({actual?.X ?? double.NaN:F1},{actual?.Y ?? double.NaN:F1}) " +
+                          $"expected=({expected.X:F1},{expected.Y:F1}) diff=({dx:F2},{dy:F2})");
+        }
+        return sb.ToString();
+    }
 
     // ---- edge hit testing (rendering lives in EdgeLayer) ----
 
@@ -384,10 +427,11 @@ public sealed class GraphCanvas : Panel
 }
 
 /// <summary>
-/// Draws the world-space grid and dependency edges. Lives inside the transformed world
-/// canvas, so all drawing is in world coordinates (the parent's RenderTransform handles
-/// pan/zoom). <see cref="Control.Render"/> is overridable here (unlike <see cref="Panel"/>,
-/// which seals it).
+/// Draws the grid and dependency edges. This control is stretched over the whole
+/// <see cref="GraphCanvas"/> viewport (so the grid always covers the entire background)
+/// and applies the pan/zoom matrix itself: all drawing happens in world coordinates
+/// inside <see cref="PushTransform"/>. <see cref="Control.Render"/> is overridable here
+/// (unlike <see cref="Panel"/>, which seals it).
 /// </summary>
 internal sealed class EdgeLayer : Control
 {
@@ -407,8 +451,13 @@ internal sealed class EdgeLayer : Control
     {
         base.Render(dc);
         if (_graph is null) return;
-        DrawGrid(dc);
-        foreach (var edge in _graph.Edges) DrawEdge(dc, edge);
+
+        // Avalonia 11: Push* returns an IDisposable state (Pop() was removed)
+        using (dc.PushTransform(_viewMatrix))
+        {
+            DrawGrid(dc);
+            foreach (var edge in _graph.Edges) DrawEdge(dc, edge);
+        }
     }
 
     private void DrawGrid(DrawingContext dc)
