@@ -162,10 +162,10 @@ greeter.Greet("cordis");
 // 源生成器（CordiSharpImportGenerator）：
 //   1. 在插件库里找到 [Service("greeter")] 的实现类型 GreeterService（T1）
 //   2. 生成镜像接口 IGreeterService（T1 的公共方法/属性）+ 弱引用桥实现
-//   3. 生成 C#14 扩展属性 ctx.greeter / ctx.Echo（名称 = Import 名或别名）
+//   3. 生成 C#14 扩展属性 ctx.Greeter / ctx.Echo（名称 = 服务名 PascalCase，或别名）
 
 await set.LoadPlugin("GreeterService");
-var greeting = ctx.greeter.Greet("cordis");   // root 解析（宿主视角，忽略 isolate）
+var greeting = ctx.Greeter.Greet("cordis");   // root 解析（宿主视角，忽略 isolate）
 ```
 
 ### 插件侧 —— `[Inject(name, Alias)]`（类级，别名触发访问器）
@@ -183,8 +183,9 @@ public class DependentPlugin : IPlugin<...>
 
 要点（两者共用）：
 
-- `ctx.XX` 是 C#14 扩展属性；接口名 = `I` + 实现类型名；**别名**只改
-  访问器属性名（`ctx.Echo`），服务仍按原名解析。
+- `ctx.XX` 是 C#14 扩展属性；接口名 = `I` + 实现类型名；访问器名默认 =
+  服务名 **PascalCase**（`"greeter"` → `ctx.Greeter`），**别名**可覆盖
+  （`Alias = "Echo"` → `ctx.Echo`），服务仍按原名解析。
 - 生成的桥持有插件服务的 **`WeakReference`**（不 pin），按方法名转发；
   卸载后调用抛 `PluginUnloadedException`。
 - 生成接口**不引用插件库的本地类型**：签名中出现插件库类型的成员会被跳过。

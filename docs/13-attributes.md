@@ -44,6 +44,9 @@ public sealed class GreeterPlugin : IPlugin<GreeterConfig>
   `Pending`；服务被移除时插件自动卸载（依赖图核心）。属性级注入在构造后自动赋值。
   **`Alias` 触发访问器**：源生成器额外生成 `ctx.<Alias>`（镜像接口 + 弱桥），解析走
   **fiber 链（isolate 感知）**——"注入即导入"。
+- **同程序集**：`[Inject]`（即使不写 `Alias`）也自动生成直接类型访问器
+  （`ctx.Greeter` → `ctx.Get<GreeterService>("greeter")`，名字 = 服务名 PascalCase，
+  可被 `Alias` 覆盖）——同程序集无 ALC 边界，**不生成接口/桥**，直接返回具体类型。
 
 ```csharp
 [Inject("database")]                          // 类级：需要 "database" 服务（仅依赖）
@@ -88,8 +91,9 @@ public sealed class GreeterService(Context ctx) : Service(ctx)
 [assembly: Import("greeter")]
 [assembly: Import("echo", Alias = "Echo")]   // 别名：访问器为 ctx.Echo，服务仍按 "echo" 解析
 
-// 生成：IGreeterService / IEchoService 接口 + ctx.greeter / ctx.Echo 访问器
-var greeting = ctx.greeter.Greet("cordis");
+// 生成：IGreeterService / IEchoService 接口 + ctx.Greeter / ctx.Echo 访问器
+// （访问器名默认 = 服务名 PascalCase，"greeter" → ctx.Greeter）
+var greeting = ctx.Greeter.Greet("cordis");
 ```
 
 - 找不到实现类型报 `CORDIS004`（生成器，错误）；别名非法标识符报 `CORDIS005`

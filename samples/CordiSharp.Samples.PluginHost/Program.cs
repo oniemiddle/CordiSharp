@@ -7,7 +7,7 @@ using CordiSharp.Samples.PluginLibrary;
 using static System.Console;
 
 // host-side imports are ASSEMBLY scoped: [assembly: Import(...)] generates the accessor
-[assembly: Import("greeter", Alias = "Greeter")]
+[assembly: Import("greeter")]
 
 // =========================================================================
 // Cross-assembly plugin loading
