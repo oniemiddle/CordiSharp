@@ -101,13 +101,24 @@ public sealed class GraphCanvas : Panel
 
     private void OnNodesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (e.OldItems is not null)
+        if (e.Action == NotifyCollectionChangedAction.Reset)
         {
-            foreach (NodeViewModel node in e.OldItems) RemoveView(node);
+            // Nodes.Clear() raises Reset with null Old/NewItems — remove every view
+            foreach (var (node, handler) in _nodeHandlers) node.PropertyChanged -= handler;
+            _nodeHandlers.Clear();
+            _world.Children.Clear();
+            _views.Clear();
         }
-        if (e.NewItems is not null)
+        else
         {
-            foreach (NodeViewModel node in e.NewItems) AddView(node);
+            if (e.OldItems is not null)
+            {
+                foreach (NodeViewModel node in e.OldItems) RemoveView(node);
+            }
+            if (e.NewItems is not null)
+            {
+                foreach (NodeViewModel node in e.NewItems) AddView(node);
+            }
         }
         InvalidateEdges();
     }
