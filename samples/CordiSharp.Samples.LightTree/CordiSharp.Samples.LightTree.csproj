@@ -12,7 +12,12 @@
     <PackageReference Include="Avalonia" Version="12.1.1" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.1" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.1" />
-    <PackageReference Include="CordiSharp" Version="0.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- reference the source project so Fiber fixes take effect immediately
+         (the local CordiSharp 0.1.0 package is a stale build artifact) -->
+    <ProjectReference Include="..\..\src\CordiSharp\CordiSharp.csproj" />
   </ItemGroup>
 
 </Project>

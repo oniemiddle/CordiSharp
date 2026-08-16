@@ -48,9 +48,49 @@ public partial class MainWindow : Window
             {
                 await ZoomTestAsync();
             }
+            else if (Environment.GetCommandLineArgs().Contains("--bugrepro"))
+            {
+                await BugReproAsync();
+            }
         };
 
         Closing += (_, _) => _vm.Dispose();
+    }
+
+    /// <summary>Reproduces the reported bug: after demo, add edge N2→N3, stop N3
+    /// (N2,N4 go Pending), then start N3 — do N2,N4 come back Active automatically?
+    /// Log: %TEMP%/lighttree-bugrepro.log</summary>
+    private async Task BugReproAsync()
+    {
+        var log = new StreamWriter(Path.Combine(Path.GetTempPath(), "lighttree-bugrepro.log"), append: false);
+        void Dump(string step)
+        {
+            log.WriteLine(step + " : " + string.Join(" | ", _vm.Nodes.Select(n => $"{n.Name}={n.State}")));
+            log.Flush();
+        }
+
+        await _vm.ClearAsync();
+        await _vm.LoadDemoAsync();
+        Dump("after demo");
+
+        var n2 = _vm.Nodes.First(n => n.Name == "N2");
+        var n3 = _vm.Nodes.First(n => n.Name == "N3");
+        await _vm.AddEdgeAsync(n2, n3); // N2 depends on N3
+        Dump("after edge N2->N3");
+        await Task.Delay(300);
+        Dump("after edge N2->N3 +300ms");
+
+        await _vm.StopAsync(n3);
+        Dump("after stop N3");
+        await Task.Delay(300);
+        Dump("after stop N3 +300ms");
+
+        await _vm.StartAsync(n3);
+        Dump("after start N3");
+        await Task.Delay(300);
+        Dump("after start N3 +300ms");
+
+        log.Close();
     }
 
     /// <summary>Programmatic zoom/pan sequence with per-frame alignment verification

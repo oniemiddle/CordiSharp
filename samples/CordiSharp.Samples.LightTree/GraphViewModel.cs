@@ -233,6 +233,7 @@ public sealed class GraphViewModel : ObservableObject, IDisposable
         Edges.Clear();
         Nodes.Clear();
         LinkSource = null;
+        _nextId = 1;
         Message = "";
         GraphChanged?.Invoke();
     }

@@ -20,7 +20,12 @@ public sealed class Fiber
     internal readonly Context Ctx;
     internal object? Config;
     internal FiberState State = FiberState.Pending;
+    /// <summary>Load-time snapshot of resolved dependencies (mirrors cordis `fiber.store`);
+    /// rebuilt from <see cref="_store"/> on every reload, cleared on unload.</summary>
     internal Dictionary<string, Impl>? Store;
+    /// <summary>Dependency resolution cache (mirrors cordis `fiber._store`); survives
+    /// unloads so a partial notify can still rebuild a complete epoch signature.</summary>
+    private readonly Dictionary<string, Impl> _store = new();
     internal Task? Inertia;
     internal Exception? Error;
     internal string Epoch = Inactive;
@@ -320,25 +325,24 @@ public sealed class Fiber
         var impl = Ctx.Reflect.GetImpl(Ctx, name, strict: true);
         if (impl is null) 
         {
-            Store?.Remove(name);
+            _store.Remove(name);
             return;
         }
         try
         {
             if (impl.Check is not null && !impl.Check())
             {
-                Store?.Remove(name);
+                _store.Remove(name);
                 return;
             }
         }
         catch (Exception error)
         {
             impl.Fiber.LogError(error);
-            Store?.Remove(name);
+            _store.Remove(name);
             return;
         }
-        Store ??= new Dictionary<string, Impl>();
-        Store[name] = impl;
+        _store[name] = impl;
     }
 
     internal void Refresh()
@@ -346,7 +350,7 @@ public sealed class Fiber
         var epoch = "";
         foreach (var name in Inject.Keys)
         {
-            if (Store is null || !Store.TryGetValue(name, out var impl))
+            if (!_store.TryGetValue(name, out var impl))
             {
                 epoch = Inactive;
                 break;
@@ -376,7 +380,7 @@ public sealed class Fiber
 
     private async Task Reload()
     {
-        Store = new Dictionary<string, Impl>(Store ?? new Dictionary<string, Impl>());
+        Store = new Dictionary<string, Impl>(_store);
         var oldEpoch = Epoch;
         EffectHandle? loadHandle = null;
         if (Runtime is not null)
