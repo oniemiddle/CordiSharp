@@ -9,7 +9,7 @@ namespace CordiSharp;
 /// services, events, plugins and the fiber lifecycle. Ports cordis <c>Context</c>.</summary>
 public sealed class Context
 {
-    internal PropertyMap<IsolateToken> Isolates;
+    internal readonly PropertyMap<IsolateToken> Isolates;
     internal PropertyMap<object?> Intercepts;
     internal Dictionary<string, object?> Extra = new();
 

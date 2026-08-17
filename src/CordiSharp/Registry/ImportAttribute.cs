@@ -7,7 +7,7 @@ namespace CordiSharp.Registry;
 /// (C# 14 extension property). Usage: <c>[assembly: Import("greeter", Alias = "Greeter")]</c>.
 /// Resolution goes through the root context (host perspective, ignores isolates);
 /// plugins should use <c>[Inject(name, Alias)]</c> instead for isolate-aware access.</summary>
-[AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true, Inherited = false)]
+[AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
 public sealed class ImportAttribute(string name) : Attribute
 {
     /// <summary>The imported service name (must match a <c>[Service(name)]</c> in a

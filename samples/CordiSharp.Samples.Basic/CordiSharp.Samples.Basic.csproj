@@ -6,6 +6,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="CordiSharp" Version="0.1.0" />
+    <ProjectReference Include="..\..\src\CordiSharp\CordiSharp.csproj" />
   </ItemGroup>
 </Project>

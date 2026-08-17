@@ -324,9 +324,7 @@ public abstract class Schema
 /// <summary>Marks a class as a plugin config type (used by the source generator and
 /// <see cref="Schema.FromType"/>).</summary>
 [AttributeUsage(AttributeTargets.Class, Inherited = false)]
-public sealed class PluginConfigAttribute : Attribute
-{
-}
+public sealed class PluginConfigAttribute : Attribute;
 
 /// <summary>Declares a default value for a config property.</summary>
 [AttributeUsage(AttributeTargets.Property)]
@@ -337,6 +335,4 @@ public sealed class DefaultValueAttribute(object? value) : Attribute
 
 /// <summary>Marks a config property as required (cannot be null).</summary>
 [AttributeUsage(AttributeTargets.Property)]
-public sealed class RequiredAttribute : Attribute
-{
-}
+public sealed class RequiredAttribute : Attribute;
