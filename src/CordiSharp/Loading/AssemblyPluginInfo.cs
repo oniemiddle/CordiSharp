@@ -8,8 +8,6 @@ namespace CordiSharp.Loading;
 /// been unloaded; doing so pins the assembly and prevents unload.</para></summary>
 public sealed class AssemblyPluginInfo
 {
-    private IReadOnlyList<string> _injectNames;
-
     internal AssemblyPluginInfo(string name, Type type, Type? configType,
         Schema.Schema? configSchema, IReadOnlyList<string> injectNames)
     {
@@ -17,7 +15,7 @@ public sealed class AssemblyPluginInfo
         Type = type;
         ConfigType = configType;
         ConfigSchema = configSchema;
-        _injectNames = injectNames;
+        InjectNames = injectNames;
     }
 
     /// <summary>The plugin name (from <c>[Plugin("name")]</c>, or the type name).</summary>
@@ -34,14 +32,14 @@ public sealed class AssemblyPluginInfo
     public Schema.Schema? ConfigSchema { get; private set; }
 
     /// <summary>Names of required injected services declared on the plugin class.</summary>
-    public IReadOnlyList<string> InjectNames => _injectNames;
+    public IReadOnlyList<string> InjectNames { get; private set; }
 
     internal void Detach()
     {
         Type = null;
         ConfigType = null;
         ConfigSchema = null;
-        _injectNames = [];
+        InjectNames = [];
     }
 
     public override string ToString() => $"AssemblyPluginInfo <{Name}>";

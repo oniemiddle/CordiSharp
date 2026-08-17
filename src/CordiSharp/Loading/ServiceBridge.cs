@@ -24,8 +24,6 @@ public class ServiceBridge<T> : ServiceBridgeBase where T : class
     private string _serviceName = "";
     private bool _revoked;
 
-    public ServiceBridge() { }
-
     public static T Create(object target, string serviceName)
     {
         var proxy = DispatchProxy.Create<T, ServiceBridge<T>>();

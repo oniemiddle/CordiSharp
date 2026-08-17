@@ -19,33 +19,33 @@ public sealed class RegistryService
     public int Size => _internal.Count;
 
     /// <summary>Resolves a plugin object into a runtime (registering it on first use).</summary>
-    public PluginHandle Plugin(object plugin, object? config = null)
+    public PluginHandle Plugin(Context ctx, object plugin, object? config = null)
     {
         if (!TryResolve(plugin, out var key, out var built))
         {
             throw new InvalidPluginException("invalid plugin, expect function or object with an 'apply' method, received " + (plugin?.GetType().Name ?? "null"));
         }
-        _ctx.Fiber.AssertActive();
+        ctx.Fiber.AssertActive();
 
         if (!_internal.TryGetValue(key, out var runtime))
         {
             runtime = built;
             _internal[key] = runtime;
         }
-        var fiber = new Fiber(_ctx, config, runtime.Inject, runtime);
+        var fiber = new Fiber(ctx, config, runtime.Inject, runtime);
         return new PluginHandle(fiber);
     }
 
     /// <summary>Creates a plugin from a callback with declared dependencies (inject).</summary>
-    public PluginHandle Inject(IEnumerable<string> deps, Func<Context, object?, object?> callback)
+    public PluginHandle Inject(Context ctx, IEnumerable<string> deps, Func<Context, object?, object?> callback)
     {
-        return Plugin(new InjectablePlugin(deps, callback));
+        return Plugin(ctx, new InjectablePlugin(deps, callback));
     }
 
     /// <summary>Creates a typed plugin from a class implementing <see cref="IPlugin{TConfig}"/>.</summary>
-    public PluginHandle Plugin<TPlugin, TConfig>(TConfig? config = default) where TPlugin : class, IPlugin<TConfig>, new()
+    public PluginHandle Plugin<TPlugin, TConfig>(Context ctx, TConfig? config = default) where TPlugin : class, IPlugin<TConfig>, new()
     {
-        return Plugin(typeof(TPlugin), config);
+        return Plugin(ctx, typeof(TPlugin), config);
     }
 
     /// <summary>Registers a plugin runtime under an explicit key without rebuilding it from

@@ -9,7 +9,7 @@ namespace CordiSharp;
 /// services, events, plugins and the fiber lifecycle. Ports cordis <c>Context</c>.</summary>
 public sealed class Context
 {
-    internal readonly PropertyMap<IsolateToken> Isolates;
+    internal PropertyMap<IsolateToken> Isolates;
     internal PropertyMap<object?> Intercepts;
     internal Dictionary<string, object?> Extra = new();
 
@@ -185,29 +185,29 @@ public sealed class Context
     // ---- plugins ----
 
     /// <summary>Loads a plugin (class, delegate or object with Apply).</summary>
-    public PluginHandle Plugin(object plugin, object? config = null) => Registry.Plugin(plugin, config);
+    public PluginHandle Plugin(object plugin, object? config = null) => Registry.Plugin(this, plugin, config);
 
     /// <summary>Loads a plugin from a typed callback.</summary>
     public PluginHandle Plugin<TConfig>(Action<Context, TConfig> plugin, TConfig? config = default)
-        => Registry.Plugin(plugin, config);
+        => Registry.Plugin(this, plugin, config);
 
     /// <summary>Loads a plugin from a typed callback that may return a disposer.</summary>
     public PluginHandle Plugin<TConfig>(Func<Context, TConfig, object?> plugin, TConfig? config = default)
-        => Registry.Plugin(plugin, config);
+        => Registry.Plugin(this, plugin, config);
 
     /// <summary>Loads a plugin from a callback without config.</summary>
-    public PluginHandle Plugin(Func<Context, object?> plugin) => Registry.Plugin(plugin);
+    public PluginHandle Plugin(Func<Context, object?> plugin) => Registry.Plugin(this, plugin);
 
     /// <summary>Loads a plugin from a callback without config.</summary>
-    public PluginHandle Plugin(Action<Context> plugin) => Registry.Plugin(plugin);
+    public PluginHandle Plugin(Action<Context> plugin) => Registry.Plugin(this, plugin);
 
     /// <summary>Loads a plugin from a callback with declared injected services.</summary>
     public PluginHandle Inject(IEnumerable<string> deps, Func<Context, object?, object?> callback)
-        => Registry.Inject(deps, callback);
+        => Registry.Inject(this, deps, callback);
 
     /// <summary>Loads a typed plugin.</summary>
     public PluginHandle Plugin<TPlugin, TConfig>(TConfig? config = default) where TPlugin : class, IPlugin<TConfig>, new()
-        => Registry.Plugin<TPlugin, TConfig>(config);
+        => Registry.Plugin<TPlugin, TConfig>(this, config);
 
     /// <summary>Unregisters a plugin runtime (disposing its fibers).</summary>
     public bool RegistryDelete(object plugin) => Registry.Delete(plugin);

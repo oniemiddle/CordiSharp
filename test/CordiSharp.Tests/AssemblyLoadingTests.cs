@@ -197,7 +197,7 @@ public class AssemblyLoadingTests
 
         // host-defined contract: the bridge adapts to the plugin's internal service by
         // method name/arity (GreeterService.Greet) without a compile-time reference
-        IGreeterContract bridge = set.GetService<IGreeterContract>("greeter");
+        var bridge = set.GetService<IGreeterContract>("greeter");
         Assert.Equal("Hello, cordis!", bridge.Greet("cordis"));
 
         await set.UnloadAsync(verify: false);

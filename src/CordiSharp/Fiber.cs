@@ -11,7 +11,6 @@ public sealed class Fiber
 {
     internal const string Inactive = "__INACTIVE__";
 
-    private readonly Context _parentCtx;
     private readonly Func<object?> _executeRunner;
     private readonly List<object> _updateHooks = [];
 
@@ -33,7 +32,7 @@ public sealed class Fiber
     internal readonly DisposableList<EffectHandle> Disposables = new();
 
     /// <summary>The parent context this fiber was created from.</summary>
-    public Context ParentContext => _parentCtx;
+    public Context ParentContext { get; }
 
     /// <summary>The context owned by this fiber.</summary>
     public Context CtxRef => Ctx;
@@ -58,15 +57,15 @@ public sealed class Fiber
             while (true)
             {
                 if (fiber.Runtime?.Name is { Length: > 0 } n) return n;
-                if (ReferenceEquals(fiber, fiber._parentCtx.Fiber)) return "root";
-                fiber = fiber._parentCtx.Fiber;
+                if (ReferenceEquals(fiber, fiber.ParentContext.Fiber)) return "root";
+                fiber = fiber.ParentContext.Fiber;
             }
         }
     }
 
     internal Fiber(Context parentCtx, object? config, IReadOnlyDictionary<string, object?> inject, PluginRuntime? runtime)
     {
-        _parentCtx = parentCtx;
+        ParentContext = parentCtx;
         Config = config;
         Inject = inject;
         Runtime = runtime;

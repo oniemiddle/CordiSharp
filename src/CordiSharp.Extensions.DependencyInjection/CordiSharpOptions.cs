@@ -15,7 +15,7 @@ public sealed class CordiSharpOptions
     }
 
     /// <summary>Registers a typed plugin to be loaded when the host starts.</summary>
-    public CordiSharpOptions AddPlugin<T>(object? config = null) where T : class, IPlugin, new()
+    public CordiSharpOptions AddPlugin<T>(object? config = null) where T : class, IPlugin
     {
         Plugins.Add((typeof(T), config));
         return this;

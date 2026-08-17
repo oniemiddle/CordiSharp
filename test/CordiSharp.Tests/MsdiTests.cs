@@ -3,6 +3,7 @@ using CordiSharp.Extensions.Hosting;
 using CordiSharp.Registry;
 using CordiSharp.Schema;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Xunit;
 
 namespace CordiSharp.Tests;
@@ -14,17 +15,17 @@ public class MsdiTests
     {
         GreeterPlugin.Messages.Clear();
         var services = new ServiceCollection();
-        services.AddCordiSharp(o => o.AddPlugin(typeof(GreeterPlugin), new GreeterConfig { Message = "hi" }));
+        services.AddCordiSharp(o => o.AddPlugin<GreeterPlugin>(new GreeterConfig { Message = "hi" }));
         services.AddCordiSharpHosting();
         services.AddSingleton<IGreeter, ConsoleGreeter>();
         await using var provider = services.BuildServiceProvider();
 
-        var host = provider.GetRequiredService<CordiSharpHost>();
+        var host = (CordiSharpHost)provider.GetRequiredService<IHostedService>();
         var ctx = provider.GetRequiredService<Context>();
         Assert.NotNull(ctx.ServiceProvider);
 
         await host.StartAsync();
-        Assert.Equal(new[] { "hi" }, GreeterPlugin.Messages);
+        Assert.Equal(["hi"], GreeterPlugin.Messages);
 
         await host.StopAsync();
         Assert.Equal(1, GreeterPlugin.Disposed);

@@ -16,7 +16,6 @@ public sealed class AssemblyPluginSet : IAsyncDisposable
     internal readonly List<PluginRuntime> Runtimes = [];
     internal readonly List<AssemblyPluginHandle> Handles = [];
     internal readonly List<WeakReference<ServiceBridgeBase>> Bridges = [];
-    private IReadOnlyList<ServiceCatalogEntry> _catalog = [];
 
     internal AssemblyPluginSet(AssemblyLoaderService loader, string name, string path,
         PluginAssemblyLoadContext alc, Assembly assembly, List<AssemblyPluginInfo> plugins,
@@ -28,7 +27,7 @@ public sealed class AssemblyPluginSet : IAsyncDisposable
         ALC = alc;
         Assembly = assembly;
         Plugins = plugins;
-        _catalog = catalog;
+        ServiceCatalog = catalog;
     }
 
     /// <summary>Display name of the load context.</summary>
@@ -51,7 +50,7 @@ public sealed class AssemblyPluginSet : IAsyncDisposable
     /// assembly) → internal service type + service name. Empty if the plugin assembly was
     /// not built with the CordiSharp service-catalog generator. Cleared after unload;
     /// entries hold plugin-ALC types, so do not retain them.</summary>
-    public IReadOnlyList<ServiceCatalogEntry> ServiceCatalog => _catalog;
+    public IReadOnlyList<ServiceCatalogEntry> ServiceCatalog { get; private set; } = [];
 
     /// <summary>Finds a discovered plugin by name.</summary>
     public AssemblyPluginInfo GetPlugin(string name)
@@ -108,7 +107,7 @@ public sealed class AssemblyPluginSet : IAsyncDisposable
         {
             throw new CordisException($"{nameof(GetService)}<T> requires T to be an interface contract");
         }
-        foreach (var entry in _catalog)
+        foreach (var entry in ServiceCatalog)
         {
             if (ReferenceEquals(entry.Contract, typeof(T)))
             {
@@ -139,7 +138,7 @@ public sealed class AssemblyPluginSet : IAsyncDisposable
             if (weak.TryGetTarget(out var bridge)) bridge.Revoke();
         }
         Bridges.Clear();
-        _catalog = [];
+        ServiceCatalog = [];
         Runtimes.Clear();
         ALC = null;
         Assembly = null;

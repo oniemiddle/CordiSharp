@@ -1,8 +1,6 @@
 using CordiSharp;
 using CordiSharp.Events;
-using CordiSharp.Registry;
 using CordiSharp.Samples.Basic;
-using CordiSharp.Schema;
 using static System.Console;
 
 // =========================================================================
@@ -91,51 +89,3 @@ WriteLine();
 
 await root.Fiber.DisposeAsync();
 WriteLine("Basic sample done.");
-
-namespace CordiSharp.Samples.Basic
-{
-    // ============================ plugin definitions ===========================
-
-    [Plugin("counter")]
-    public sealed class CounterPlugin : IPlugin<CounterConfig>
-    {
-        public void Load(Context ctx, CounterConfig config)
-        {
-            ctx.Provide("counter", config.Start);
-            ctx.Effect(() =>
-            {
-                WriteLine($"counter plugin loaded (start = {config.Start})");
-                return () => WriteLine("counter plugin disposed");
-            }, "counter-body");
-        }
-    }
-
-    [PluginConfig]
-    public sealed class CounterConfig
-    {
-        [DefaultValue(0)]
-        public int Start { get; set; }
-    }
-
-    [Service("greeter")]
-    public sealed class GreeterService(Context ctx) : Service(ctx)
-    {
-        public string Greet(string name) => $"Hello, {name}!";
-    }
-
-    [Inject("greeter")]
-    public sealed class DependentPlugin : IPlugin<DependentConfig>
-    {
-        public void Load(Context ctx, DependentConfig config)
-        {
-            var greeter = ctx.Get<GreeterService>("greeter")!;
-            WriteLine($"{config.Message}: {greeter.Greet("cordis")}");
-        }
-    }
-
-    [PluginConfig]
-    public sealed class DependentConfig
-    {
-        public string? Message { get; set; }
-    }
-}
