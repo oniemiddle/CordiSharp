@@ -55,7 +55,7 @@ public sealed class FiberNodeView : Border
         PointerReleased += OnPointerReleased;
     }
 
-    private Control BuildContent()
+    private Canvas BuildContent()
     {
         var canvas = new Canvas { Width = Size, Height = Size };
 
@@ -66,14 +66,15 @@ public sealed class FiberNodeView : Border
             Stroke = StrokeNormal,
             StrokeThickness = 2,
             Fill = _node.StateBrush,
-        };
-        _ellipse.Transitions = new Transitions
-        {
-            new BrushTransition
-            {
-                Property = Shape.FillProperty,
-                Duration = TimeSpan.FromMilliseconds(300),
-            },
+            Transitions =
+            [
+                new BrushTransition
+                {
+                    Property = Shape.FillProperty,
+                    Duration = TimeSpan.FromMilliseconds(300),
+                }
+
+            ]
         };
         Canvas.SetLeft(_ellipse, Inset);
         Canvas.SetTop(_ellipse, Inset);

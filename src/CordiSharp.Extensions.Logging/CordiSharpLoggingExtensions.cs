@@ -1,4 +1,3 @@
-using CordiSharp;
 using CordiSharp.Extensions.DependencyInjection;
 using CordiSharp.Logger;
 using Microsoft.Extensions.DependencyInjection;

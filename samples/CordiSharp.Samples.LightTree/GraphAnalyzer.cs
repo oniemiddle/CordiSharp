@@ -1,5 +1,3 @@
-using CordiSharp;
-
 namespace CordiSharp.Samples.LightTree;
 
 /// <summary>
@@ -50,6 +48,12 @@ public static class GraphAnalyzer
         var stack = new Stack<NodeViewModel>();
         var result = new List<List<NodeViewModel>>();
 
+        foreach (var v in adj.Keys)
+        {
+            if (!indices.ContainsKey(v)) StrongConnect(v);
+        }
+        return result;
+
         void StrongConnect(NodeViewModel v)
         {
             indices[v] = lowlink[v] = index++;
@@ -58,14 +62,14 @@ public static class GraphAnalyzer
 
             foreach (var w in adj[v])
             {
-                if (!indices.ContainsKey(w))
+                if (!indices.TryGetValue(w, out var link))
                 {
                     StrongConnect(w);
                     lowlink[v] = Math.Min(lowlink[v], lowlink[w]);
                 }
                 else if (onStack.Contains(w))
                 {
-                    lowlink[v] = Math.Min(lowlink[v], indices[w]);
+                    lowlink[v] = Math.Min(lowlink[v], link);
                 }
             }
 
@@ -82,11 +86,5 @@ public static class GraphAnalyzer
                 result.Add(scc);
             }
         }
-
-        foreach (var v in adj.Keys)
-        {
-            if (!indices.ContainsKey(v)) StrongConnect(v);
-        }
-        return result;
     }
 }

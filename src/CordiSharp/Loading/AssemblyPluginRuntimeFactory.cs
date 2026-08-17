@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Reflection;
 using CordiSharp.Registry;
-using CordiSharp.Schema;
 
 namespace CordiSharp.Loading;
 

@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using Avalonia.Media;
-using CordiSharp;
 
 namespace CordiSharp.Samples.LightTree;
 
@@ -12,8 +11,8 @@ namespace CordiSharp.Samples.LightTree;
 /// </summary>
 public sealed class GraphViewModel : ObservableObject, IDisposable
 {
-    public ObservableCollection<NodeViewModel> Nodes { get; } = new();
-    public ObservableCollection<EdgeViewModel> Edges { get; } = new();
+    public ObservableCollection<NodeViewModel> Nodes { get; } = [];
+    public ObservableCollection<EdgeViewModel> Edges { get; } = [];
 
     private readonly FiberHost _host = new();
     private int _nextId = 1;

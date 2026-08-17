@@ -1,5 +1,3 @@
-using CordiSharp.Schema;
-
 namespace CordiSharp.Loading;
 
 /// <summary>A plugin discovered in an external assembly. Metadata is resolved by reflection

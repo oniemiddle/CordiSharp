@@ -1,5 +1,4 @@
 using Avalonia.Media;
-using CordiSharp;
 
 namespace CordiSharp.Samples.LightTree;
 

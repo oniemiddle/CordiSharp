@@ -1,5 +1,4 @@
 using Avalonia.Threading;
-using CordiSharp;
 using CordiSharp.Events;
 using CordiSharp.Registry;
 
@@ -19,7 +18,7 @@ public sealed class FiberHost : IDisposable
 {
     private readonly Context _root = Context.Create();
     private readonly Dictionary<Fiber, NodeViewModel> _fiberMap = new();
-    private readonly List<IDisposable> _subscriptions = new();
+    private readonly List<IDisposable> _subscriptions = [];
 
     public FiberHost()
     {

@@ -1,32 +1,29 @@
 using Avalonia.Media;
-using CordiSharp;
 using CordiSharp.Registry;
 
 namespace CordiSharp.Samples.LightTree;
 
 /// <summary>One light in the tree: a visual node backed by a real CordiSharp plugin fiber.</summary>
-public sealed class NodeViewModel : ObservableObject
+public sealed class NodeViewModel(int id, double x, double y) : ObservableObject
 {
     public const double Radius = 24;
 
-    public int Id { get; }
-    public string Name { get; }
-
-    public NodeViewModel(int id, double x, double y)
-    {
-        Id = id;
-        Name = $"N{id}";
-        _x = x;
-        _y = y;
-    }
+    public int Id { get; } = id;
+    public string Name { get; } = $"N{id}";
 
     // ---- position (world coordinates, node center) ----
 
-    private double _x;
-    public double X { get => _x; set => Set(ref _x, value); }
+    public double X
+    {
+        get;
+        set => Set(ref field, value);
+    } = x;
 
-    private double _y;
-    public double Y { get => _y; set => Set(ref _y, value); }
+    public double Y
+    {
+        get;
+        set => Set(ref field, value);
+    } = y;
 
     // ---- fiber state & colors ----
 
@@ -67,5 +64,5 @@ public sealed class NodeViewModel : ObservableObject
     public PluginHandle? Handle { get; set; }
 
     /// <summary>Service names this node depends on (snapshot taken at load time).</summary>
-    public IReadOnlyList<string> ProviderNames { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> ProviderNames { get; set; } = [];
 }
