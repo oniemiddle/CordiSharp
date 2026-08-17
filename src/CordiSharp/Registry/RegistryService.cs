@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
 namespace CordiSharp.Registry;
@@ -18,33 +19,33 @@ public sealed class RegistryService
     public int Size => _internal.Count;
 
     /// <summary>Resolves a plugin object into a runtime (registering it on first use).</summary>
-    public PluginHandle Plugin(Context ctx, object plugin, object? config = null)
+    public PluginHandle Plugin(object plugin, object? config = null)
     {
         if (!TryResolve(plugin, out var key, out var built))
         {
             throw new InvalidPluginException("invalid plugin, expect function or object with an 'apply' method, received " + (plugin?.GetType().Name ?? "null"));
         }
-        ctx.Fiber.AssertActive();
+        _ctx.Fiber.AssertActive();
 
         if (!_internal.TryGetValue(key, out var runtime))
         {
             runtime = built;
             _internal[key] = runtime;
         }
-        var fiber = new Fiber(ctx, config, runtime.Inject, runtime);
+        var fiber = new Fiber(_ctx, config, runtime.Inject, runtime);
         return new PluginHandle(fiber);
     }
 
     /// <summary>Creates a plugin from a callback with declared dependencies (inject).</summary>
-    public PluginHandle Inject(Context ctx, IEnumerable<string> deps, Func<Context, object?, object?> callback)
+    public PluginHandle Inject(IEnumerable<string> deps, Func<Context, object?, object?> callback)
     {
-        return Plugin(ctx, new InjectablePlugin(deps, callback));
+        return Plugin(new InjectablePlugin(deps, callback));
     }
 
     /// <summary>Creates a typed plugin from a class implementing <see cref="IPlugin{TConfig}"/>.</summary>
-    public PluginHandle Plugin<TPlugin, TConfig>(Context ctx, TConfig? config = default) where TPlugin : class, IPlugin<TConfig>, new()
+    public PluginHandle Plugin<TPlugin, TConfig>(TConfig? config = default) where TPlugin : class, IPlugin<TConfig>, new()
     {
-        return Plugin(ctx, typeof(TPlugin), config);
+        return Plugin(typeof(TPlugin), config);
     }
 
     /// <summary>Registers a plugin runtime under an explicit key without rebuilding it from
@@ -103,10 +104,11 @@ public sealed class RegistryService
 
     internal IEnumerable<PluginRuntime> Values() => _internal.Values;
 
-    private static bool TryResolve(object plugin, out object key, out PluginRuntime runtime)
+    
+    private static bool TryResolve(object plugin, [NotNullWhen(true)] out object? key, [NotNullWhen(true)] out PluginRuntime? runtime)
     {
-        key = null!;
-        runtime = null!;
+        key = null;
+        runtime = null;
         switch (plugin)
         {
             case Type type:
@@ -186,9 +188,12 @@ public sealed class RegistryService
             {
                 try
                 {
-                    if (parameters.Length == 0) return d.DynamicInvoke(null);
-                    if (parameters.Length == 1) return d.DynamicInvoke(ctx);
-                    return d.DynamicInvoke(ctx, config);
+                    return parameters.Length switch
+                    {
+                        0 => d.DynamicInvoke(null),
+                        1 => d.DynamicInvoke(ctx),
+                        _ => d.DynamicInvoke(ctx, config)
+                    };
                 }
                 catch (TargetInvocationException e)
                 {

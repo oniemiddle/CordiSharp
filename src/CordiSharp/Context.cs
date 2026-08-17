@@ -20,7 +20,7 @@ public sealed class Context
     public Context? Parent { get; }
 
     /// <summary>The fiber that owns this context.</summary>
-    public Fiber Fiber { get; internal set; } = null!;
+    public Fiber Fiber { get; internal set; }
 
     /// <summary>The events service (shared across the whole root tree).</summary>
     public EventsService Events { get; internal set; } = null!;
@@ -76,9 +76,6 @@ public sealed class Context
         fiber.Disposables.Clear();
         return root;
     }
-
-    /// <summary>Returns whether a value is a <see cref="Context"/>.</summary>
-    public static bool Is(object? value) => value is Context;
 
     public override string ToString() => $"Context <{Name}>";
 
@@ -136,8 +133,7 @@ public sealed class Context
         {
             return def.Get(this);
         }
-        if (Fiber.Runtime is null) return Reflect.Get(this, name, strict: false);
-        return GetFromFiberChain(name);
+        return Fiber.Runtime is null ? Reflect.Get(this, name, strict: false) : GetFromFiberChain(name);
     }
 
     public T? Get<T>(string name, bool strict = true) => (T?)Get(name, strict);
@@ -189,29 +185,29 @@ public sealed class Context
     // ---- plugins ----
 
     /// <summary>Loads a plugin (class, delegate or object with Apply).</summary>
-    public PluginHandle Plugin(object plugin, object? config = null) => Registry.Plugin(this, plugin, config);
+    public PluginHandle Plugin(object plugin, object? config = null) => Registry.Plugin(plugin, config);
 
     /// <summary>Loads a plugin from a typed callback.</summary>
     public PluginHandle Plugin<TConfig>(Action<Context, TConfig> plugin, TConfig? config = default)
-        => Registry.Plugin(this, plugin, config);
+        => Registry.Plugin(plugin, config);
 
     /// <summary>Loads a plugin from a typed callback that may return a disposer.</summary>
     public PluginHandle Plugin<TConfig>(Func<Context, TConfig, object?> plugin, TConfig? config = default)
-        => Registry.Plugin(this, plugin, config);
+        => Registry.Plugin(plugin, config);
 
     /// <summary>Loads a plugin from a callback without config.</summary>
-    public PluginHandle Plugin(Func<Context, object?> plugin) => Registry.Plugin(this, plugin);
+    public PluginHandle Plugin(Func<Context, object?> plugin) => Registry.Plugin(plugin);
 
     /// <summary>Loads a plugin from a callback without config.</summary>
-    public PluginHandle Plugin(Action<Context> plugin) => Registry.Plugin(this, plugin);
+    public PluginHandle Plugin(Action<Context> plugin) => Registry.Plugin(plugin);
 
     /// <summary>Loads a plugin from a callback with declared injected services.</summary>
     public PluginHandle Inject(IEnumerable<string> deps, Func<Context, object?, object?> callback)
-        => Registry.Inject(this, deps, callback);
+        => Registry.Inject(deps, callback);
 
     /// <summary>Loads a typed plugin.</summary>
     public PluginHandle Plugin<TPlugin, TConfig>(TConfig? config = default) where TPlugin : class, IPlugin<TConfig>, new()
-        => Registry.Plugin<TPlugin, TConfig>(this, config);
+        => Registry.Plugin<TPlugin, TConfig>(config);
 
     /// <summary>Unregisters a plugin runtime (disposing its fibers).</summary>
     public bool RegistryDelete(object plugin) => Registry.Delete(plugin);
