@@ -1,8 +1,109 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:CordiSharp.Samples.LightTree"
              x:Class="CordiSharp.Samples.LightTree.App"
              RequestedThemeVariant="Light">
+  <Application.Resources>
+    <!--
+      Node "light" template: pure view. The container is positioned at the node's
+      world X/Y (ItemContainerTheme above); the -32 margin re-centers the 64x64 light
+      on that anchor. Fill follows StateBrush (0.3s transition via the "light" class
+      style above); the context menu binds directly to NodeViewModel commands.
+    -->
+    <DataTemplate x:Key="NodeTemplate" DataType="vm:NodeViewModel" x:DataType="vm:NodeViewModel">
+      <!-- 64x64 light anchored at the container's top-left; a RenderTransform shifts the
+           visuals by (-32,-32) so the circle's center lands exactly on the node's world
+           X/Y (negative margins would zero the layout slot). No inner Canvas. -->
+      <Border Background="Transparent">
+        <Border.RenderTransform>
+          <TranslateTransform X="-32" Y="-32" />
+        </Border.RenderTransform>
+        <Panel Width="64" Height="64">
+          <Ellipse Classes="light" Width="48" Height="48"
+                   HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,8,0,0"
+                   Fill="{Binding StateBrush}"
+                   Stroke="#37474F" StrokeThickness="2" />
+
+          <Border Width="48" Height="48" HorizontalAlignment="Center" VerticalAlignment="Top"
+                  Margin="0,8,0,0" IsHitTestVisible="False">
+            <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="Bold" Foreground="White"
+                       TextAlignment="Center" VerticalAlignment="Center" HorizontalAlignment="Center" />
+          </Border>
+
+          <TextBlock Text="{Binding StateText}" FontSize="10" Foreground="#607D8B"
+                     HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,-8"
+                     TextAlignment="Center" IsHitTestVisible="False" />
+
+          <Border IsVisible="{Binding IsWarning}" Background="#B71C1C" CornerRadius="8"
+                  Width="16" Height="16" HorizontalAlignment="Right" VerticalAlignment="Top">
+            <TextBlock Text="!" FontSize="10" FontWeight="Bold" Foreground="White"
+                       TextAlignment="Center" VerticalAlignment="Center" HorizontalAlignment="Center" />
+          </Border>
+        </Panel>
+
+        <Border.ContextMenu>
+          <ContextMenu>
+            <MenuItem Header="启动 (→ Active)" Command="{Binding StartCommand}" />
+            <MenuItem Header="停用 (→ Disposed)" Command="{Binding StopCommand}" />
+            <MenuItem Header="注入故障 (→ Failed)" Command="{Binding FailCommand}" />
+            <MenuItem Header="恢复 (Failed → Active)" Command="{Binding RecoverCommand}" />
+            <Separator />
+            <MenuItem Header="删除节点" Command="{Binding RemoveCommand}" />
+          </ContextMenu>
+        </Border.ContextMenu>
+      </Border>
+    </DataTemplate>
+  </Application.Resources>
+  
   <Application.Styles>
     <FluentTheme />
+
+    <!--
+      0.3s color transition for node lights. Declared as a Style Setter instead of an
+      inline <Ellipse.Transitions> inside the DataTemplate: in Avalonia 12.1.1 the
+      inline form throws NullReferenceException when the template's deferred content
+      is built.
+    -->
+    <Style Selector="Ellipse.light">
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="{x:Static Ellipse.FillProperty}" Duration="0:0:0.3" />
+        </Transitions>
+      </Setter>
+    </Style>
+
+    <!-- GraphCanvas theme: edge layer (viewport) + world canvas (pan/zoom matrix) + node ItemsControl -->
+    <Style Selector="vm|GraphCanvas">
+      <Setter Property="Background" Value="#FAFAFA" />
+      <Setter Property="ClipToBounds" Value="True" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Panel Background="{TemplateBinding Background}">
+            <vm:EdgeLayer x:Name="PART_Edges" IsHitTestVisible="False" ClipToBounds="False" />
+            <Canvas x:Name="PART_World" ClipToBounds="False" RenderTransformOrigin="0,0">
+              <ItemsControl x:Name="PART_Items" Width="20000" Height="20000"
+                            ItemsSource="{Binding Graph.Nodes, RelativeSource={RelativeSource TemplatedParent}}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <Canvas />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemContainerTheme>
+                  <ControlTheme TargetType="ContentPresenter" x:DataType="vm:NodeViewModel">
+                    <!-- ContentPresenter renders its Content natively (no Template property);
+                         the theme only positions the container on the canvas -->
+                    <Setter Property="Canvas.Left" Value="{Binding X}" />
+                    <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                  </ControlTheme>
+                </ItemsControl.ItemContainerTheme>
+                <ItemsControl.ItemTemplate>
+                  <StaticResource ResourceKey="NodeTemplate" />
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Canvas>
+          </Panel>
+        </ControlTemplate>
+      </Setter>
+    </Style>
   </Application.Styles>
 </Application>

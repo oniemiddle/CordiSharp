@@ -1,20 +1,21 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:local="using:CordiSharp.Samples.LightTree"
+        xmlns:vm="using:CordiSharp.Samples.LightTree"
         x:Class="CordiSharp.Samples.LightTree.MainWindow"
+        x:DataType="vm:GraphViewModel"
         Title="CordiSharp 点灯树 · Fiber 状态级联"
         Width="1280" Height="840"
         MinWidth="900" MinHeight="600"
         WindowStartupLocation="CenterScreen">
   <DockPanel>
-    <!-- 工具栏 -->
+    <!-- 工具栏：所有按钮都是命令，无 code-behind -->
     <Border DockPanel.Dock="Top" Background="#ECEFF1" Padding="8" BorderBrush="#CFD8DC" BorderThickness="0,0,0,1">
       <StackPanel Orientation="Horizontal" Spacing="8">
-        <Button x:Name="AddNodeButton" Content="＋ 添加节点" />
-        <Button x:Name="DemoButton" Content="示例图" />
-        <Button x:Name="StartAllButton" Content="启动全部" />
-        <Button x:Name="StopAllButton" Content="停止全部" />
-        <Button x:Name="ClearButton" Content="清空" />
+        <Button Content="＋ 添加节点" Command="{Binding AddNodeCommand}" />
+        <Button Content="示例图" Command="{Binding LoadDemoCommand}" />
+        <Button Content="启动全部" Command="{Binding StartAllCommand}" />
+        <Button Content="停止全部" Command="{Binding StopAllCommand}" />
+        <Button Content="清空" Command="{Binding ClearCommand}" />
         <TextBlock VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#546E7A"
                    Text="Ctrl+左键点节点 = 连线/删线（先依赖方后提供方，已有边则删除）｜左键拖动移动/平移" />
         <TextBlock VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#546E7A"
@@ -22,13 +23,14 @@
       </StackPanel>
     </Border>
 
-    <!-- 信息栏（级联结果 / 环告警） -->
-    <Border DockPanel.Dock="Bottom" x:Name="InfoBar" Background="#FFF3E0"
-            Padding="10" IsVisible="False" BorderBrush="#FFE0B2" BorderThickness="0,1,0,0">
-      <TextBlock x:Name="InfoText" TextWrapping="Wrap" FontSize="13" />
+    <!-- 信息栏（级联结果 / 环告警）：纯绑定 -->
+    <Border DockPanel.Dock="Bottom" Background="#FFF3E0" Padding="10"
+            IsVisible="{Binding HasMessage}" BorderBrush="#FFE0B2" BorderThickness="0,1,0,0">
+      <TextBlock Text="{Binding Message}" Foreground="{Binding MessageBrush}"
+                 TextWrapping="Wrap" FontSize="13" />
     </Border>
 
     <!-- 画布：可拖拽平移、滚轮缩放、点灯树 -->
-    <local:GraphCanvas x:Name="Canvas" />
+    <vm:GraphCanvas x:Name="Canvas" Graph="{Binding}" />
   </DockPanel>
 </Window>

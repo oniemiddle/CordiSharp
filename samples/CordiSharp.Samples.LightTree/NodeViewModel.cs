@@ -1,59 +1,56 @@
 using Avalonia.Media;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using CordiSharp.Registry;
 
 namespace CordiSharp.Samples.LightTree;
 
-/// <summary>One light in the tree: a visual node backed by a real CordiSharp plugin fiber.</summary>
-public sealed class NodeViewModel(int id, double x, double y) : ObservableObject
+/// <summary>One light in the tree: a visual node backed by a real CordiSharp plugin fiber.
+/// Pure VM: state/position are observable properties (source-generated partial
+/// properties); all lifecycle actions are commands that delegate to the graph.</summary>
+public sealed partial class NodeViewModel : ObservableObject
 {
     public const double Radius = 24;
 
-    public int Id { get; } = id;
-    public string Name { get; } = $"N{id}";
+    private readonly GraphViewModel? _graph;
+
+    public int Id { get; }
+    public string Name { get; }
+
+    public NodeViewModel(GraphViewModel? graph, int id, double x, double y)
+    {
+        _graph = graph;
+        Id = id;
+        Name = $"N{id}";
+        X = x;
+        Y = y;
+    }
 
     // ---- position (world coordinates, node center) ----
 
-    public double X
-    {
-        get;
-        set => Set(ref field, value);
-    } = x;
+    [ObservableProperty]
+    public partial double X { get; set; }
 
-    public double Y
-    {
-        get;
-        set => Set(ref field, value);
-    } = y;
+    [ObservableProperty]
+    public partial double Y { get; set; }
 
     // ---- fiber state & colors ----
 
-    public FiberState State
-    {
-        get;
-        set
-        {
-            if (Set(ref field, value)) StateBrush = StateColors.For(value);
-        }
-    } = FiberState.Disposed;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StateBrush))]
+    [NotifyPropertyChangedFor(nameof(StateText))]
+    public partial FiberState State { get; set; } = FiberState.Disposed;
 
-    public IBrush StateBrush
-    {
-        get;
-        private set => Set(ref field, value);
-    } = StateColors.For(FiberState.Disposed);
+    public IBrush StateBrush => StateColors.For(State);
+    public string StateText => StateColors.Text(State);
 
     /// <summary>True when this node is part of a detected dependency cycle (dead island).</summary>
-    public bool IsWarning
-    {
-        get;
-        set => Set(ref field, value);
-    }
+    [ObservableProperty]
+    public partial bool IsWarning { get; set; }
 
-    public bool IsLinkSource
-    {
-        get;
-        set => Set(ref field, value);
-    }
+    /// <summary>True while this node is the pending "dependent" end of a Ctrl+click connection.</summary>
+    [ObservableProperty]
+    public partial bool IsLinkSource { get; set; }
 
     // ---- host-side state (managed by GraphViewModel / FiberHost) ----
 
@@ -65,4 +62,21 @@ public sealed class NodeViewModel(int id, double x, double y) : ObservableObject
 
     /// <summary>Service names this node depends on (snapshot taken at load time).</summary>
     public IReadOnlyList<string> ProviderNames { get; set; } = [];
+
+    // ---- commands (bound from the node context menu / diagnostics) ----
+
+    [RelayCommand]
+    private Task Start() => _graph!.StartAsync(this);
+
+    [RelayCommand]
+    private Task Stop() => _graph!.StopAsync(this);
+
+    [RelayCommand]
+    private Task Fail() => _graph!.FailAsync(this);
+
+    [RelayCommand]
+    private Task Recover() => _graph!.RecoverAsync(this);
+
+    [RelayCommand]
+    private Task Remove() => _graph!.RemoveAsync(this);
 }

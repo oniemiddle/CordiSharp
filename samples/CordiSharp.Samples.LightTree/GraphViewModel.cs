@@ -1,5 +1,8 @@
 using System.Collections.ObjectModel;
+using Avalonia;
 using Avalonia.Media;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace CordiSharp.Samples.LightTree;
 
@@ -8,8 +11,9 @@ namespace CordiSharp.Samples.LightTree;
 /// real CordiSharp operation (start / stop / inject fault / recover / remove), waits for
 /// the fiber cascade to settle, then validates the resulting state graph — if the fiber
 /// state machine cannot support it (dependency cycle / dead island), it stops and reports.
+/// Pure VM: everything UI-facing is either an observable property or a command.
 /// </summary>
-public sealed class GraphViewModel : ObservableObject, IDisposable
+public sealed partial class GraphViewModel : ObservableObject, IDisposable
 {
     public ObservableCollection<NodeViewModel> Nodes { get; } = [];
     public ObservableCollection<EdgeViewModel> Edges { get; } = [];
@@ -22,46 +26,58 @@ public sealed class GraphViewModel : ObservableObject, IDisposable
 
     // ---- connection selection (Ctrl+left click) ----
 
-    public NodeViewModel? LinkSource
-    {
-        get;
-        set
-        {
-            if (ReferenceEquals(field, value)) return;
-            field?.IsLinkSource = false;
-            field = value;
-            value?.IsLinkSource = true;
-            OnPropertyChanged();
-        }
-    }
+    [ObservableProperty]
+    public partial NodeViewModel? LinkSource { get; set; }
+
+    partial void OnLinkSourceChanging(NodeViewModel? value) => value?.IsLinkSource = false;
+    partial void OnLinkSourceChanged(NodeViewModel? value) => value?.IsLinkSource = true;
 
     /// <summary>Cancels the pending connection selection (Ctrl+click on empty canvas).</summary>
     public void CancelLink() => LinkSource = null;
 
     // ---- info bar ----
 
-    public string Message
-    {
-        get;
-        private set
-        {
-            if (Set(ref field, value)) OnPropertyChanged(nameof(HasMessage));
-        }
-    } = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMessage))]
+    public partial string Message { get; private set; } = "";
 
     public bool HasMessage => Message.Length > 0;
 
-    public IBrush MessageBrush
+    [ObservableProperty]
+    public partial IBrush MessageBrush { get; private set; } = Brushes.Black;
+
+    // ---- view-injected services ----
+
+    /// <summary>Provided by the view: returns the world point where a new node appears
+    /// (viewport center). Keeps geometry knowledge out of the VM.</summary>
+    public Func<Point>? AddNodePointProvider { get; set; }
+
+    // ---- commands (toolbar) ----
+
+    [RelayCommand]
+    private void AddNode()
     {
-        get;
-        private set => Set(ref field, value);
-    } = Brushes.Black;
+        var position = AddNodePointProvider?.Invoke() ?? new Point(200, 200);
+        AddNode(position.X, position.Y);
+    }
+
+    [RelayCommand]
+    private Task LoadDemo() => LoadDemoAsync();
+
+    [RelayCommand]
+    private Task StartAll() => StartAllAsync();
+
+    [RelayCommand]
+    private Task StopAll() => StopAllAsync();
+
+    [RelayCommand]
+    private Task Clear() => ClearAsync();
 
     // ---- node & edge management ----
 
     public NodeViewModel AddNode(double x, double y)
     {
-        var node = new NodeViewModel(_nextId++, Math.Max(0, x), Math.Max(0, y));
+        var node = new NodeViewModel(this, _nextId++, Math.Max(0, x), Math.Max(0, y));
         Nodes.Add(node);
         GraphChanged?.Invoke();
         return node;
@@ -324,11 +340,7 @@ public sealed class GraphViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Transient hint (e.g. link-mode instructions) without running analysis.</summary>
-    public void ShowHint(string text)
-    {
-        Message = text;
-        MessageBrush = Brushes.Black;
-    }
+    public void ShowHint(string text) => SetMessage(text, Brushes.Black);
 
     public void Dispose() => _host.Dispose();
 }
