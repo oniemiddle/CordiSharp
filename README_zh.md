@@ -1,5 +1,7 @@
 # CordiSharp
 
+[English](README.md) | 简体中文
+
 [Cordis](https://github.com/cordiverse/cordis) —— 时空可组合性元框架的 C# 移植版。
 CordiSharp 将 Cordis 基于上下文/作用域的插件系统、依赖注入的服务、类型化事件和
 fiber 生命周期管理带到 .NET，并原生集成 Microsoft.Extensions.DependencyInjection、

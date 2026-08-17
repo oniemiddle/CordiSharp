@@ -1,5 +1,7 @@
 # CordiSharp
 
+English | [简体中文](README_zh.md)
+
 A C# port of [Cordis](https://github.com/cordiverse/cordis) - the meta-framework of spatiotemporal composability.
 
 > **Docs**: detailed API reference (in Chinese) lives in [`docs/`](docs/README.md).
