@@ -44,6 +44,49 @@ public sealed class AssemblyLoaderService(Context ctx) : Service(ctx)
         return set;
     }
 
+    private static int _scriptCounter;
+
+    /// <summary>Loads a plugin assembly compiled in memory (e.g. by the Roslyn plugin
+    /// compiler) into a new collectible load context and discovers its plugins. Works like
+    /// <see cref="LoadAssembly(string)"/> but reads the PE image (and optional portable PDB)
+    /// from byte arrays, so no file is written to disk. <paramref name="name"/> becomes the
+    /// load-context display name (default: a generated script name);
+    /// <paramref name="directory"/> is the directory probed for plugin dependencies
+    /// (default: the application base directory). The assembly bytes and PDB are retained in
+    /// memory until the set is unloaded.</summary>
+    public AssemblyPluginSet LoadAssembly(byte[] assemblyBytes, byte[]? pdbBytes = null,
+        string? name = null, string? directory = null)
+    {
+        if (assemblyBytes is null || assemblyBytes.Length == 0)
+        {
+            throw new CordisException("cannot load assembly from an empty byte array");
+        }
+        var alcName = name ?? $"plugin:script-{Interlocked.Increment(ref _scriptCounter)}";
+        var dir = directory is null ? AppContext.BaseDirectory : Path.GetFullPath(directory);
+        var alc = new PluginAssemblyLoadContext(alcName, dir);
+        var asmStream = new MemoryStream(assemblyBytes);
+        var pdbStream = pdbBytes is null ? null : new MemoryStream(pdbBytes);
+        Assembly assembly;
+        try
+        {
+            assembly = alc.LoadFromStream(asmStream, pdbStream);
+        }
+        catch (Exception error)
+        {
+            alc.Unload();
+            throw new CordisException($"""cannot load in-memory assembly "{alcName}": {error.Message}""", error);
+        }
+
+        var plugins = Discover(assembly);
+        var catalog = LoadCatalog(assembly);
+        var set = new AssemblyPluginSet(this, alcName, alcName, alc, assembly, plugins, catalog);
+        // keep the streams alive for the lifetime of the assembly: the runtime may read
+        // the PDB stream lazily, so dropping it could break symbol resolution
+        set.RetainedStreams = pdbStream is null ? [asmStream] : [asmStream, pdbStream];
+        _sets.Add(set);
+        return set;
+    }
+
     /// <summary>Unloads an assembly: disposes every plugin fiber created from it, drops all
     /// strong references into the assembly and unloads its load context. When
     /// <paramref name="verify"/> is true (default), a bounded forced-GC loop checks that the

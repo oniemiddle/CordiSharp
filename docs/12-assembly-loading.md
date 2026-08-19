@@ -191,6 +191,11 @@ public class DependentPlugin : IPlugin<...>
 - 生成接口**不引用插件库的本地类型**：签名中出现插件库类型的成员会被跳过。
 - 宿主仅编译期引用插件库，运行时从不触碰其类型 → 插件库只存在于可回收 ALC 中。
 - 找不到实现类型报 `CORDIS004`；别名非法标识符报 `CORDIS005`。
+- **框架服务也可作为目标**：生成器搜索范围包含 CordiSharp 核心本身（仅跳过
+  System/Microsoft/netstandard 噪音），因此 `AssemblyLoaderService`（`[Service("loader")]`）
+  这类框架里的插件式服务也能被 import/inject，例如
+  `[assembly: Import("loader")]` → `ctx.Loader`，或 `[Inject("loader", Alias = "Loader")]`。
+  镜像接口会保留可空注解（`string?`）；默认参数值不会镜像（调用时需显式传参）。
 
 ## 卸载规则（重要）
 
@@ -215,3 +220,81 @@ public class DependentPlugin : IPlugin<...>
   服务变更通知（依赖图刷新）在 ALC 插件之间正常生效。
 - 插件程序集若也是用源生成器编译的，其生成的 `PluginRegistrations` 会被静态
   注册扫描**跳过**（collectible ALC 守卫），不会污染静态注册表。
+
+## 运行时编译插件（Roslyn）
+
+`CordiSharp.Plugins.Roslyn` 项目提供**从运行时 C# 源码编译插件**的能力：用 Roslyn
+在内存中把源码编译成程序集（PE + 便携 PDB），再**走 `AssemblyLoaderService` 的加载
+路径**放进可回收 ALC —— 不写任何临时文件，卸载语义与普通外部程序集完全一致。
+
+```csharp
+using CordiSharp;
+using CordiSharp.Loading;
+using CordiSharp.Plugins.Roslyn;
+
+var root = Context.Create();
+
+// 1. 先加载 loader 插件：roslyn 服务声明了 [Inject("loader")]，loader 必须先可用
+//    （若先加载 roslyn 服务，fiber 会保持 Pending，等 loader 出现后自动激活）
+await root.Plugin(typeof(AssemblyLoaderService));
+
+// 2. 加载 roslyn 插件服务
+await root.Plugin(typeof(RoslynPluginService));
+var roslyn = root.Get<RoslynPluginService>("roslyn")!;
+
+// 3. 源码是完整编译单元：class + [Plugin]/[Service]/IPlugin
+const string source = """
+    using CordiSharp;
+    using CordiSharp.Registry;
+
+    [Plugin("runtime-counter")]
+    public sealed class RuntimeCounterPlugin : IPlugin<RuntimeCounterConfig>
+    {
+        public void Load(Context ctx, RuntimeCounterConfig config)
+            => ctx.Provide("runtime-counter", config.Start);
+    }
+
+    [PluginConfig]
+    public sealed class RuntimeCounterConfig
+    {
+        [DefaultValue(0)]
+        public int Start { get; set; }
+    }
+    """;
+
+// 4. 编译 + 加载（经注入的 loader 进入可回收 ALC，返回 AssemblyPluginSet）
+var set = roslyn.CompileAndLoad(source);
+var handle = set.LoadPlugin("runtime-counter", new Dictionary<string, object?> { ["Start"] = 42 });
+await handle;
+Console.WriteLine(root.Get<int>("runtime-counter"));   // 42
+
+// 5. 卸载与外部程序集相同
+await set.UnloadAsync();
+```
+
+要点：
+
+- **加载路径唯一**：`PluginAssemblyLoadContext` 是 internal，运行时编译出的程序集
+  只能通过 `AssemblyLoaderService` 进入可回收 ALC。为此 loader 新增了内存重载
+  `LoadAssembly(byte[] assemblyBytes, byte[]? pdbBytes = null, string? name = null,
+  string? directory = null)`（`LoadFromStream`，无磁盘文件）；PE/PDB 字节在卸载前
+  保留在内存中（symbol 可能被延迟读取）。
+- **反射发现**：`[Plugin]`、`Service` 子类、`IPlugin` 实现由 loader 的反射发现识别，
+  运行时编译的程序集**无需源生成器**。但 `[Import]` 访问器 / 服务目录是编译期生成
+  产物，编译代码里不可用（可用 `set.GetService<T>(name)` 弱引用桥替代）。
+- **引用白名单 + 附加引用**：编译器默认引用 core BCL、CordiSharp 核心与入口程序集；
+  需要更多引用时经 `RoslynCompileOptions.ExtraReferencePaths` /
+  `ExtraReferences` 显式传入（例如宿主程序集、第三方库）。引用必须是运行时
+  Default ALC 里共享的同身份程序集。
+- **无隐式 using**：运行时编译没有 MSBuild 的隐式 using，源码要自带 `using`；
+  `RoslynCompileOptions.AddDefaultUsings`（默认开）会预置一组常用 global using。
+- **诊断**：编译错误抛 `RoslynCompilationException`（携带 `Diagnostic[]`）；
+  也可用 `TryCompile` 拿到错误列表而不抛异常。
+- **依赖注入**：`RoslynPluginService` 声明 `[Inject("loader")]` —— loader 必须先加载
+  （或稍后加载，fiber 保持 `Pending` 并自动激活）；卸载 loader 会级联卸载本服务。
+  其他插件可 `[Inject("roslyn")]` 注入它。
+- **API**：`RoslynPluginService`（服务名 `"roslyn"`）的 `Compile` / `TryCompile`
+  是**纯静态**操作（不依赖 loader）；`CompileAndLoad` / `LoadCompiled` 为实例方法，
+  经注入的 loader 完成加载。`CSharpPluginCompiler` 是纯编译引擎（可脱离 CordiSharp 使用）。
+- **安全**：运行时编译 = 进程内全信任执行，与 loader 加载的任何程序集同等权限；
+  不要对不可信源码启用该能力。

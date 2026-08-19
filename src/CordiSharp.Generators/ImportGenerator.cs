@@ -89,10 +89,11 @@ public sealed class CordiSharpImportGenerator : IIncrementalGenerator
                     case IMethodSymbol method when IsUsableMethod(method, impl):
                         members.Add(new MemberModel(method.Name, FormatType(method.ReturnType), "method",
                             method.Parameters.Select(p => FormatType(p.Type)).ToList(),
+                            method.Parameters.Select(p => FormatTypeKey(p.Type)).ToList(),
                             method.Parameters.Select(p => p.Name).ToList(), false, false));
                         break;
                     case IPropertySymbol property when IsUsableProperty(property, impl):
-                        members.Add(new MemberModel(property.Name, FormatType(property.Type), "property", [], [],
+                        members.Add(new MemberModel(property.Name, FormatType(property.Type), "property", [], [], [],
                             property.GetMethod is not null, property.SetMethod is not null));
                         break;
                 }
@@ -153,13 +154,17 @@ public sealed class CordiSharpImportGenerator : IIncrementalGenerator
         return IsUsableType(property.Type, impl);
     }
 
-    /// <summary>Only types that do not come from the plugin assembly are usable in the
+    /// <summary>Only types that do not come from a plugin assembly are usable in the
     /// generated interface — referencing plugin-local types would force the runtime to load
-    /// the plugin assembly into the default context.</summary>
+    /// the plugin assembly into the default context. CordiSharp framework types are always
+    /// shared (the host references the framework), so they stay usable even when the service
+    /// itself is declared in the framework (e.g. AssemblyLoaderService's members that use
+    /// <c>AssemblyPluginSet</c>).</summary>
     private static bool IsUsableType(ITypeSymbol type, INamedTypeSymbol impl)
     {
         if (type.ContainingAssembly is not null
-            && SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, impl.ContainingAssembly))
+            && SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, impl.ContainingAssembly)
+            && impl.ContainingAssembly.Name != "CordiSharp")
         {
             return false;
         }
@@ -184,8 +189,10 @@ public sealed class CordiSharpImportGenerator : IIncrementalGenerator
 
     private static bool SkipAssembly(IAssemblySymbol asm)
     {
-        return asm.Name == "CordiSharp"
-            || asm.Name.StartsWith("System", StringComparison.Ordinal)
+        // BCL / framework-noise assemblies are never import targets. CordiSharp itself is
+        // searched: plugin-style framework services (e.g. AssemblyLoaderService, registered
+        // as [Service("loader")]) are legitimate import/inject targets.
+        return asm.Name.StartsWith("System", StringComparison.Ordinal)
             || asm.Name.StartsWith("Microsoft", StringComparison.Ordinal)
             || asm.Name.StartsWith("netstandard", StringComparison.Ordinal);
     }
@@ -203,7 +210,22 @@ public sealed class CordiSharpImportGenerator : IIncrementalGenerator
         }
     }
 
-    private static string FormatType(ITypeSymbol type) => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+    /// <summary>Fully-qualified display format used for mirrored interface members; keeps
+    /// nullable reference annotations (<c>string?</c>) so the generated contract matches the
+    /// service's public API (the files are emitted with <c>#nullable enable</c>).</summary>
+    private static readonly SymbolDisplayFormat MirrorFormat = SymbolDisplayFormat.FullyQualifiedFormat
+        .WithMiscellaneousOptions(
+            SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers
+            | SymbolDisplayMiscellaneousOptions.UseSpecialTypes
+            | SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
+
+    private static string FormatType(ITypeSymbol type) => type.ToDisplayString(MirrorFormat);
+
+    /// <summary>Format for <c>typeof(...)</c> lists in the bridge: nullable reference
+    /// annotations are dropped (<c>typeof(string?)</c> is not valid C#; nullable value
+    /// types such as <c>int?</c> keep their modifier).</summary>
+    private static string FormatTypeKey(ITypeSymbol type)
+        => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
     private static string Q(string value) => "\"" + value + "\"";
 
@@ -305,9 +327,9 @@ public sealed class CordiSharpImportGenerator : IIncrementalGenerator
             {
                 var parameters = string.Join(", ", m.ParamTypes.Zip(m.ParamNames, (t, n) => t + " " + n));
                 var argList = string.Join(", ", m.ParamNames);
-                var typeList = m.ParamTypes.Count == 0
+                var typeList = m.ParamTypeKeys.Count == 0
                     ? "System.Type.EmptyTypes"
-                    : "new[] { " + string.Join(", ", m.ParamTypes.Select(t => "typeof(" + t + ")")) + " }";
+                    : "new[] { " + string.Join(", ", m.ParamTypeKeys.Select(t => "typeof(" + t + ")")) + " }";
                 sb.AppendLine("        public " + m.ReturnType + " " + m.Name + "(" + parameters + ")");
                 sb.AppendLine("        {");
                 if (m.ReturnType == "void")
@@ -343,7 +365,7 @@ public sealed class CordiSharpImportGenerator : IIncrementalGenerator
         }
         sb.AppendLine("    }");
         sb.AppendLine();
-        sb.AppendLine("    public static class " + impl.Name + "ImportExtensions");
+        sb.AppendLine("    internal static class " + impl.Name + "ImportExtensions");
         sb.AppendLine("    {");
         sb.AppendLine("        extension(Context ctx)");
         sb.AppendLine("        {");
@@ -370,12 +392,14 @@ public sealed class CordiSharpImportGenerator : IIncrementalGenerator
     }
 
     private sealed class MemberModel(string name, string returnType, string kind,
-        List<string> paramTypes, List<string> paramNames, bool getter, bool setter)
+        List<string> paramTypes, List<string> paramTypeKeys, List<string> paramNames, bool getter, bool setter)
     {
         public string Name { get; } = name;
         public string ReturnType { get; } = returnType;
         public string Kind { get; } = kind;
         public List<string> ParamTypes { get; } = paramTypes;
+        /// <summary>Non-nullable forms of the parameter types, for <c>typeof(...)</c> lists.</summary>
+        public List<string> ParamTypeKeys { get; } = paramTypeKeys;
         public List<string> ParamNames { get; } = paramNames;
         public bool Getter { get; } = getter;
         public bool Setter { get; } = setter;

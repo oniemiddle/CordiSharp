@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\CordiSharp\CordiSharp.csproj" />
+    <ProjectReference Include="..\..\src\CordiSharp.Plugins.Roslyn\CordiSharp.Plugins.Roslyn.csproj" />
     <ProjectReference Include="..\..\samples\CordiSharp.Samples.PluginLibrary\CordiSharp.Samples.PluginLibrary.csproj" />
     <ProjectReference Include="..\..\src\CordiSharp.Extensions.DependencyInjection\CordiSharp.Extensions.DependencyInjection.csproj" />
     <ProjectReference Include="..\..\src\CordiSharp.Extensions.Hosting\CordiSharp.Extensions.Hosting.csproj" />

@@ -33,8 +33,13 @@ public sealed class AssemblyPluginSet : IAsyncDisposable
     /// <summary>Display name of the load context.</summary>
     public string Name { get; }
 
-    /// <summary>Full path of the loaded assembly file.</summary>
+    /// <summary>Full path of the loaded assembly file, or the load-context display name
+    /// for in-memory (byte-array) loads.</summary>
     public string AssemblyPath { get; }
+
+    /// <summary>Streams backing an in-memory load (PE + symbol images); kept alive until
+    /// unload so the runtime can read symbols lazily. Null for file-based loads.</summary>
+    internal List<Stream>? RetainedStreams { get; set; }
 
     /// <summary>True once this set has been unloaded (all members are inert).</summary>
     public bool IsUnloaded { get; private set; }
@@ -140,6 +145,9 @@ public sealed class AssemblyPluginSet : IAsyncDisposable
         Bridges.Clear();
         ServiceCatalog = [];
         Runtimes.Clear();
+        // drop the in-memory load streams: nothing pins the ALC through them, and the
+        // runtime has already read what it needs (unload was requested)
+        RetainedStreams = null;
         ALC = null;
         Assembly = null;
     }

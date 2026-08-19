@@ -1,10 +1,14 @@
 <Solution>
+  <Folder Name="/plugins/">
+    <Project Path="src/CordiSharp.Plugins.Roslyn/CordiSharp.Plugins.Roslyn.csproj" />
+  </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/CordiSharp.Samples.Basic/CordiSharp.Samples.Basic.csproj" />
     <Project Path="samples/CordiSharp.Samples.Extensions/CordiSharp.Samples.Extensions.csproj" />
     <Project Path="samples/CordiSharp.Samples.PluginHost/CordiSharp.Samples.PluginHost.csproj" />
     <Project Path="samples/CordiSharp.Samples.PluginLibrary/CordiSharp.Samples.PluginLibrary.csproj" />
     <Project Path="samples/CordiSharp.Samples.LightTree/CordiSharp.Samples.LightTree.csproj" />
+    <Project Path="samples/CordiSharp.Samples.Roslyn/CordiSharp.Samples.Roslyn.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/CordiSharp.Analyzers/CordiSharp.Analyzers.csproj" />
